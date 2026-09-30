@@ -22,6 +22,8 @@ public class IndexModel : PageModel
     public int UniqueBinsCount => Materials.Select(m => m.BinLocation).Where(b => !string.IsNullOrEmpty(b)).Distinct().Count();
     public List<string> JobOptions => Materials.Select(m => m.JobNumber).Distinct().OrderBy(j => j).ToList();
     public List<string> BinOptions => Materials.Select(m => m.BinLocation).Where(b => !string.IsNullOrEmpty(b)).Distinct().OrderBy(b => b).ToList();
+    public List<string> VendorOptions => Materials.Select(m => m.VendorName).Where(v => !string.IsNullOrEmpty(v)).Distinct().OrderBy(v => v).ToList();
+    public List<string> HeatOptions => Materials.Select(m => m.HeatNumber).Where(h => !string.IsNullOrEmpty(h)).Distinct().OrderBy(h => h).ToList();
 
     public async Task OnGetAsync()
     {

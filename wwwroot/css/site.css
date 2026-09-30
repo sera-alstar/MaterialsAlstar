@@ -1,31 +1,544 @@
-html {
+/* ========================================================
+   HubSpot CRM Design System for MaterialsAlstar
+   ======================================================== */
+
+:root {
+  --hs-navy: #2d3e50;
+  --hs-navy-dark: #1f2d3d;
+  --hs-coral: #ff7a59;
+  --hs-coral-hover: #e56242;
+  --hs-coral-light: #fff1ed;
+  --hs-teal: #0091ae;
+  --hs-teal-hover: #007a93;
+  --hs-bg: #f5f8fa;
+  --hs-text-dark: #33475b;
+  --hs-text-muted: #516f90;
+  --hs-border: #cbd6e2;
+  --hs-border-light: #dfe3eb;
+  --hs-row-hover: #f0f4f7;
+  --hs-card-shadow: 0 1px 3px rgba(45, 62, 80, 0.08);
+}
+
+body.hubspot-body {
+  background-color: var(--hs-bg);
+  color: var(--hs-text-dark);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
 }
 
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
+/* ---------------------------------------------
+   Global Top Navigation
+   --------------------------------------------- */
+.hs-nav-header {
+  background-color: var(--hs-navy);
+  color: #fff;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+.hs-brand {
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+}
+.hs-brand-icon {
+  background: var(--hs-coral);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.text-coral {
+  color: var(--hs-coral);
 }
 
-html {
+.hs-nav-links {
+  gap: 4px;
+}
+.hs-nav-item {
+  color: #cbd6e2;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+.hs-nav-item:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.hs-nav-item.active {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+}
+
+.hs-global-search input {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid transparent;
+  color: #fff;
+  border-radius: 20px;
+  font-size: 12px;
+}
+.hs-global-search input::placeholder {
+  color: #99acc2;
+}
+.hs-global-search input:focus {
+  background-color: #fff;
+  color: var(--hs-text-dark);
+  border-color: var(--hs-coral);
+  box-shadow: 0 0 0 2px rgba(255, 122, 89, 0.25);
+}
+
+.hs-icon-btn {
+  background: transparent;
+  border: none;
+  color: #cbd6e2;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.hs-icon-btn:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.hs-avatar {
+  background: var(--hs-coral);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ---------------------------------------------
+   Page Header & Action Bar
+   --------------------------------------------- */
+.hs-page-header {
+  background: #fff;
+  border-bottom: 1px solid var(--hs-border-light);
+  padding: 16px 24px 0 24px;
+}
+
+.hs-breadcrumb {
+  font-size: 12px;
+  color: var(--hs-text-muted);
+  margin-bottom: 6px;
+}
+.hs-breadcrumb a {
+  color: var(--hs-text-muted);
+  text-decoration: none;
+}
+.hs-breadcrumb a:hover {
+  color: var(--hs-teal);
+}
+
+.hs-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.hs-page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--hs-text-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hs-count-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hs-text-muted);
+  background-color: var(--hs-bg);
+  border: 1px solid var(--hs-border);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.hs-btn-primary {
+  background-color: var(--hs-coral);
+  border-color: var(--hs-coral);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hs-btn-primary:hover {
+  background-color: var(--hs-coral-hover);
+  border-color: var(--hs-coral-hover);
+  color: #fff;
+}
+
+.hs-btn-secondary {
+  background-color: #fff;
+  border: 1px solid var(--hs-border);
+  color: var(--hs-text-dark);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+.hs-btn-secondary:hover {
+  background-color: var(--hs-bg);
+  border-color: #b0c1d4;
+  color: var(--hs-text-dark);
+}
+
+/* ---------------------------------------------
+   HubSpot View Tabs
+   --------------------------------------------- */
+.hs-views-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid transparent;
+}
+.hs-view-tab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hs-text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hs-view-tab:hover {
+  color: var(--hs-text-dark);
+}
+.hs-view-tab.active {
+  color: var(--hs-text-dark);
+  border-bottom-color: var(--hs-coral);
+}
+.hs-add-view-btn {
+  font-size: 12px;
+  color: var(--hs-teal);
+  background: transparent;
+  border: none;
+  padding: 8px 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.hs-add-view-btn:hover {
+  color: var(--hs-teal-hover);
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------
+   Filter & Search Toolbar
+   --------------------------------------------- */
+.hs-toolbar {
+  background: #fff;
+  border-bottom: 1px solid var(--hs-border-light);
+  padding: 12px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hs-search-box {
   position: relative;
-  min-height: 100%;
+  min-width: 280px;
+}
+.hs-search-box input {
+  font-size: 13px;
+  border: 1px solid var(--hs-border);
+  border-radius: 4px;
+  padding: 7px 12px 7px 32px;
+}
+.hs-search-box input:focus {
+  border-color: var(--hs-teal);
+  box-shadow: 0 0 0 2px rgba(0, 145, 174, 0.2);
+}
+.hs-search-box i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--hs-text-muted);
 }
 
-body {
-  margin-bottom: 60px;
+.hs-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.hs-filter-btn {
+  background: #fff;
+  border: 1px solid var(--hs-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hs-text-dark);
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.hs-filter-btn:hover {
+  background: var(--hs-bg);
+  border-color: #b0c1d4;
+}
+.hs-filter-btn.active {
+  background: #eaf0f6;
+  border-color: var(--hs-teal);
+  color: var(--hs-teal);
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
-  text-align: end;
+/* ---------------------------------------------
+   Floating Bulk Action Bar
+   --------------------------------------------- */
+.hs-bulk-actions {
+  display: none;
+  background-color: var(--hs-navy);
+  color: #fff;
+  padding: 8px 24px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--hs-coral);
+  animation: slideDown 0.2s ease;
+}
+.hs-bulk-actions.active {
+  display: flex;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-  text-align: start;
+/* ---------------------------------------------
+   HubSpot Table Styling
+   --------------------------------------------- */
+.hs-table-container {
+  background: #fff;
+  border: 1px solid var(--hs-border-light);
+  border-radius: 0;
+  box-shadow: var(--hs-card-shadow);
+  margin: 0;
+}
+
+.hs-table {
+  width: 100%;
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.hs-table thead th {
+  background-color: #f5f8fa;
+  color: var(--hs-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--hs-border-light);
+  white-space: nowrap;
+}
+.hs-table tbody td {
+  padding: 12px 16px;
+  vertical-align: middle;
+  border-bottom: 1px solid #edf1f5;
+  font-size: 13px;
+  color: var(--hs-text-dark);
+}
+.hs-table tbody tr {
+  transition: background-color 0.1s ease;
+  cursor: pointer;
+}
+.hs-table tbody tr:hover {
+  background-color: var(--hs-row-hover);
+}
+.hs-table tbody tr.selected {
+  background-color: #f2f7fc;
+}
+
+.hs-primary-link {
+  color: var(--hs-teal);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.hs-primary-link:hover {
+  color: var(--hs-teal-hover);
+  text-decoration: underline;
+}
+
+.hs-badge-job {
+  background-color: #eaf0f6;
+  color: var(--hs-navy);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.hs-badge-heat {
+  background-color: #ffebe6;
+  color: #bf2600;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #ffbdad;
+}
+.hs-badge-bin {
+  background-color: #e6fcff;
+  color: #006575;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #b3f5ff;
+}
+.hs-badge-status {
+  background-color: #e3fcef;
+  color: #006644;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------
+   Slide-out Side Panel (HubSpot Drawer)
+   --------------------------------------------- */
+.hs-drawer-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(45, 62, 80, 0.45);
+  z-index: 1040;
+}
+.hs-drawer-backdrop.active {
+  display: block;
+}
+
+.hs-drawer {
+  position: fixed;
+  top: 0;
+  right: -540px;
+  width: 520px;
+  max-width: 90vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  z-index: 1050;
+  transition: right 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+.hs-drawer.active {
+  right: 0;
+}
+
+.hs-drawer-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--hs-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--hs-bg);
+}
+.hs-drawer-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.hs-drawer-footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--hs-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+}
+
+.hs-property-group {
+  margin-bottom: 24px;
+}
+.hs-property-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--hs-text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hs-property-field {
+  margin-bottom: 12px;
+}
+.hs-property-label {
+  font-size: 12px;
+  color: var(--hs-text-muted);
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+.hs-property-value {
+  font-size: 14px;
+  color: var(--hs-text-dark);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------
+   Pagination Footer
+   --------------------------------------------- */
+.hs-pagination-bar {
+  background: #fff;
+  border-top: 1px solid var(--hs-border-light);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--hs-text-muted);
 }

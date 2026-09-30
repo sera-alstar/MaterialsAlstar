@@ -1,52 +1,58 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MaterialsAlstar</title>
-    <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/MaterialsAlstar.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">MaterialsAlstar</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
-                        </li>
-                    </ul>
+<body class="hubspot-body">
+    <!-- HubSpot Global Top Navigation -->
+    <header class="hs-nav-header">
+        <div class="container-fluid px-3 d-flex align-items-center justify-content-between">
+            <!-- Left: Logo & Main Navigation -->
+            <div class="d-flex align-items-center gap-3">
+                <a class="hs-brand d-flex align-items-center gap-2 text-decoration-none" asp-page="/Index">
+                    <span class="hs-brand-icon">
+                        <i class="bi bi-box-seam-fill"></i>
+                    </span>
+                    <span class="hs-brand-text">Materials<span class="text-coral">Alstar</span></span>
+                </a>
+                <nav class="hs-nav-links d-none d-md-flex align-items-center ms-3">
+                    <a asp-page="/Index" class="hs-nav-item active">Materials &amp; QC</a>
+                    <a href="#" class="hs-nav-item">Receiving Logs</a>
+                    <a href="#" class="hs-nav-item">Heat Numbers (MTR)</a>
+                    <a href="#" class="hs-nav-item">Warehouse Bins</a>
+                    <a href="#" class="hs-nav-item">Reports</a>
+                </nav>
+            </div>
+
+            <!-- Right: Search, Quick Actions, User Profile -->
+            <div class="d-flex align-items-center gap-3">
+                <div class="hs-global-search d-none d-lg-block position-relative">
+                    <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted small"></i>
+                    <input type="text" class="form-control form-control-sm ps-4" placeholder="Search across Alstar..." style="width: 220px;">
+                </div>
+                <div class="hs-nav-icons d-flex align-items-center gap-2">
+                    <button class="hs-icon-btn" title="Notifications" type="button"><i class="bi bi-bell"></i></button>
+                    <button class="hs-icon-btn" title="Settings" type="button"><i class="bi bi-gear"></i></button>
+                    <button class="hs-icon-btn" title="Help" type="button"><i class="bi bi-question-circle"></i></button>
+                    <div class="hs-avatar ms-1" title="Aaron Victoria">AV</div>
                 </div>
             </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - MaterialsAlstar - <a asp-area="" asp-page="/Privacy">Privacy</a>
         </div>
-    </footer>
+    </header>
+
+    <!-- Main Container -->
+    <main role="main" class="hs-main-content">
+        @RenderBody()
+    </main>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
