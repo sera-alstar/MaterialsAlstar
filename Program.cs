@@ -6,18 +6,19 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 
-// Configure EF Core (In-Memory database for local test data)
+// Configure EF Core with In-Memory Database for local testing
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseInMemoryDatabase("MaterialsAlstarTestDb");
+    options.UseInMemoryDatabase("MaterialsAlstarDb");
 });
 
 var app = builder.Build();
 
-// Seed test data
+// Seed initial test data
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<AppDbContext>();
     DbInitializer.Initialize(context);
 }
 

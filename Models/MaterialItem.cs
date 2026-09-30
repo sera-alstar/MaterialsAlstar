@@ -3,11 +3,18 @@ namespace MaterialsAlstar.Models;
 public class MaterialItem
 {
     public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Sku { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
-    public int Quantity { get; set; }
-    public string Unit { get; set; } = "pcs";
-    public decimal UnitCost { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string JobNumber { get; set; } = string.Empty;
+    public string PoNumber { get; set; } = string.Empty;
+    public string ReceiverId { get; set; } = string.Empty;
+    public string VendorName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string BomId { get; set; } = string.Empty;
+    public decimal QuantityShipped { get; set; }
+    public decimal QuantityReceived { get; set; }
+    public string Unit { get; set; } = "EA";
+    public string HeatNumber { get; set; } = string.Empty;
+    public string BinLocation { get; set; } = string.Empty;
+    public string ReceivedBy { get; set; } = string.Empty;
+    public DateTime? ReceivedDate { get; set; }
+    public string Status { get; set; } = "Received";
 }
