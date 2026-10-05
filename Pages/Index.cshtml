@@ -24,10 +24,10 @@
                     Actions
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm border">
-                    <li><a class="dropdown-item small" href="#" id="exportCsvBtn"><i class="bi bi-download me-2 text-muted"></i>Export current view</a></li>
-                    <li><a class="dropdown-item small" href="#"><i class="bi bi-layout-three-columns me-2 text-muted"></i>Edit columns</a></li>
+                    <li><a class="dropdown-item small" href="javascript:void(0)" onclick="exportToCsv()"><i class="bi bi-download me-2 text-muted"></i>Export current view</a></li>
+                    <li><a class="dropdown-item small" href="javascript:void(0)"><i class="bi bi-layout-three-columns me-2 text-muted"></i>Edit columns</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item small text-danger" href="#"><i class="bi bi-trash me-2"></i>Delete view</a></li>
+                    <li><a class="dropdown-item small text-danger" href="javascript:void(0)"><i class="bi bi-trash me-2"></i>Delete view</a></li>
                 </ul>
             </div>
             <button class="hs-btn-secondary" type="button"><i class="bi bi-upload me-1"></i> Import</button>
@@ -39,13 +39,13 @@
 
     <!-- HubSpot Saved View Tabs -->
     <div class="hs-views-bar">
-        <button class="hs-view-tab active" data-view="all">
+        <button class="hs-view-tab active" data-view="all" onclick="selectViewTab(this, 'all')">
             <i class="bi bi-table"></i> All materials <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@Model.TotalItems</span>
         </button>
-        <button class="hs-view-tab" data-view="241143">
+        <button class="hs-view-tab" data-view="241143" onclick="selectViewTab(this, '241143')">
             Job 241143 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "241143"))</span>
         </button>
-        <button class="hs-view-tab" data-view="251024">
+        <button class="hs-view-tab" data-view="251024" onclick="selectViewTab(this, '251024')">
             Job 251024 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "251024"))</span>
         </button>
         <button class="hs-add-view-btn" type="button"><i class="bi bi-plus"></i> Add view</button>
@@ -58,7 +58,7 @@
         <!-- Search Box -->
         <div class="hs-search-box">
             <i class="bi bi-search"></i>
-            <input type="text" id="hsSearchInput" class="form-control form-control-sm" placeholder="Search all properties...">
+            <input type="text" id="hsSearchInput" oninput="applyAllFilters()" class="form-control form-control-sm" placeholder="Search all properties...">
         </div>
 
         <!-- Filter Chips -->
@@ -69,10 +69,10 @@
                     <span class="text-muted">Job:</span> <span id="jobFilterLabel">All</span>
                 </button>
                 <ul class="dropdown-menu shadow-sm" id="jobDropdownMenu">
-                    <li><a class="dropdown-item small active" href="#" data-val="">All Jobs</a></li>
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('job', '', 'All', this)">All Jobs</a></li>
                     @foreach (var job in Model.JobOptions)
                     {
-                        <li><a class="dropdown-item small" href="#" data-val="@job">Job @job</a></li>
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('job', '@job', 'Job @job', this)">Job @job</a></li>
                     }
                 </ul>
             </div>
@@ -83,10 +83,10 @@
                     <span class="text-muted">Vendor:</span> <span id="vendorFilterLabel">All</span>
                 </button>
                 <ul class="dropdown-menu shadow-sm" id="vendorDropdownMenu">
-                    <li><a class="dropdown-item small active" href="#" data-val="">All Vendors</a></li>
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('vendor', '', 'All', this)">All Vendors</a></li>
                     @foreach (var vendor in Model.VendorOptions)
                     {
-                        <li><a class="dropdown-item small" href="#" data-val="@vendor">@vendor</a></li>
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('vendor', '@vendor', '@vendor', this)">@vendor</a></li>
                     }
                 </ul>
             </div>
@@ -97,10 +97,10 @@
                     <span class="text-muted">Bin:</span> <span id="binFilterLabel">All</span>
                 </button>
                 <ul class="dropdown-menu shadow-sm" id="binDropdownMenu">
-                    <li><a class="dropdown-item small active" href="#" data-val="">All Bins</a></li>
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('bin', '', 'All', this)">All Bins</a></li>
                     @foreach (var bin in Model.BinOptions)
                     {
-                        <li><a class="dropdown-item small" href="#" data-val="@bin">Bin @bin</a></li>
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('bin', '@bin', 'Bin @bin', this)">Bin @bin</a></li>
                     }
                 </ul>
             </div>
@@ -111,15 +111,15 @@
                     <span class="text-muted">Heat #:</span> <span id="heatFilterLabel">All</span>
                 </button>
                 <ul class="dropdown-menu shadow-sm" id="heatDropdownMenu">
-                    <li><a class="dropdown-item small active" href="#" data-val="">All Heat #s</a></li>
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('heat', '', 'All', this)">All Heat #s</a></li>
                     @foreach (var heat in Model.HeatOptions)
                     {
-                        <li><a class="dropdown-item small" href="#" data-val="@heat">🔥 @heat</a></li>
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('heat', '@heat', '@heat', this)">🔥 @heat</a></li>
                     }
                 </ul>
             </div>
 
-            <button class="hs-filter-btn text-muted" id="hsResetFilters" type="button" title="Clear all filters">
+            <button class="hs-filter-btn text-muted" id="hsResetFilters" onclick="resetAllFilters()" type="button" title="Clear all filters">
                 <i class="bi bi-x-circle"></i> Clear
             </button>
         </div>
@@ -135,13 +135,13 @@
 <div class="hs-bulk-actions" id="hsBulkActions">
     <div class="d-flex align-items-center gap-3">
         <span class="fw-bold fs-6"><span id="hsSelectedCount">0</span> materials selected</span>
-        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button"><i class="bi bi-pencil me-1"></i> Edit</button>
-        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button"><i class="bi bi-box-arrow-in-right me-1"></i> Assign Bin</button>
-        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button"><i class="bi bi-check2-circle me-1"></i> Mark Verified</button>
-        <button class="btn btn-sm btn-outline-light py-1 px-3 fw-semibold" type="button"><i class="bi bi-download me-1"></i> Export Selected</button>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Bulk Edit selected records')"><i class="bi bi-pencil me-1"></i> Edit</button>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Bulk Assign Bin to selected records')"><i class="bi bi-box-arrow-in-right me-1"></i> Assign Bin</button>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Marked selected records as Verified')"><i class="bi bi-check2-circle me-1"></i> Mark Verified</button>
+        <button class="btn btn-sm btn-outline-light py-1 px-3 fw-semibold" type="button" onclick="exportToCsv()"><i class="bi bi-download me-1"></i> Export Selected</button>
     </div>
     <div>
-        <button class="btn btn-sm btn-link text-white text-decoration-none" id="hsDeselectAll" type="button">Deselect all</button>
+        <button class="btn btn-sm btn-link text-white text-decoration-none" id="hsDeselectAll" onclick="deselectAllRows()" type="button">Deselect all</button>
     </div>
 </div>
 
@@ -152,7 +152,7 @@
             <thead>
                 <tr>
                     <th style="width: 40px;" class="text-center">
-                        <input type="checkbox" class="form-check-input" id="hsSelectAll">
+                        <input type="checkbox" class="form-check-input" id="hsSelectAll" onchange="handleSelectAllChange(this)">
                     </th>
                     <th style="min-width: 260px;">Description</th>
                     <th style="min-width: 140px;">BOMID</th>
@@ -170,6 +170,7 @@
                 @foreach (var item in Model.Materials)
                 {
                     <tr class="hs-row"
+                        onclick="openDrawerFromRow(this)"
                         data-id="@item.Id"
                         data-job="@item.JobNumber"
                         data-po="@item.PoNumber"
@@ -188,7 +189,7 @@
                         
                         <!-- Checkbox -->
                         <td class="text-center" onclick="event.stopPropagation();">
-                            <input type="checkbox" class="form-check-input hs-row-checkbox">
+                            <input type="checkbox" class="form-check-input hs-row-checkbox" onchange="handleRowCheckboxChange(this)">
                         </td>
 
                         <!-- Material Description (Click opens HubSpot Drawer) -->
@@ -250,7 +251,7 @@
 
                         <!-- Quick Preview Action Button -->
                         <td class="text-end" onclick="event.stopPropagation();">
-                            <button class="btn btn-sm btn-link text-muted hs-open-drawer p-0" title="Quick view details">
+                            <button class="btn btn-sm btn-link text-muted p-0" onclick="openDrawerFromRow(this.closest('tr'))" title="Quick view details">
                                 <i class="bi bi-chevron-right fs-6"></i>
                             </button>
                         </td>
@@ -279,7 +280,7 @@
 <!-- ========================================================
      HubSpot Slide-out Drawer (Side Panel)
      ======================================================== -->
-<div class="hs-drawer-backdrop" id="hsDrawerBackdrop"></div>
+<div class="hs-drawer-backdrop" id="hsDrawerBackdrop" onclick="closeMaterialDrawer()"></div>
 
 <div class="hs-drawer" id="hsDrawer">
     <!-- Drawer Header -->
@@ -289,7 +290,7 @@
             <h5 class="mb-0 fw-bold text-dark text-truncate" style="max-width: 380px;" id="drawerTitle">Material Name</h5>
             <small class="text-muted font-monospace" id="drawerBOMID">BOMID: -</small>
         </div>
-        <button class="btn-close" id="hsCloseDrawer" type="button" aria-label="Close"></button>
+        <button class="btn-close" id="hsCloseDrawer" onclick="closeMaterialDrawer()" type="button" aria-label="Close"></button>
     </div>
 
     <!-- Drawer Body -->
@@ -388,10 +389,10 @@
 
     <!-- Drawer Footer Actions -->
     <div class="hs-drawer-footer">
-        <button class="btn btn-outline-secondary btn-sm" id="drawerCloseBtn" type="button">Close</button>
+        <button class="btn btn-outline-secondary btn-sm" id="drawerCloseBtn" onclick="closeMaterialDrawer()" type="button">Close</button>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-printer me-1"></i> Print Bin Tag</button>
-            <button class="hs-btn-primary btn-sm py-1" type="button"><i class="bi bi-pencil me-1"></i> Edit Record</button>
+            <button class="btn btn-outline-primary btn-sm" type="button" onclick="alert('Printing Bin Tag label...')"><i class="bi bi-printer me-1"></i> Print Bin Tag</button>
+            <button class="hs-btn-primary btn-sm py-1" type="button" onclick="alert('Editing material properties...')"><i class="bi bi-pencil me-1"></i> Edit Record</button>
         </div>
     </div>
 </div>
@@ -467,3 +468,246 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    // Global filter state
+    let activeView = "all";
+    let filterJob = "";
+    let filterVendor = "";
+    let filterBin = "";
+    let filterHeat = "";
+
+    // 1. Open HubSpot Slide-out Drawer
+    function openDrawerFromRow(el) {
+        const row = el.closest ? el.closest(".hs-row") : el;
+        if (!row) return;
+
+        const data = row.dataset;
+        document.getElementById("drawerJobBadge").textContent = `Job ${data.job || "N/A"}`;
+        document.getElementById("drawerTitle").textContent = data.desc || "Material Item";
+        document.getElementById("drawerBOMID").textContent = `BOMID: ${data.bomid || "N/A"}`;
+
+        document.getElementById("drawerHeat").textContent = data.heat || "-";
+        document.getElementById("drawerBin").textContent = data.bin || "-";
+        document.getElementById("drawerQty").textContent = `${data.qtyRecv || 0} ${data.unit || "EA"}`;
+
+        document.getElementById("drawerDesc").textContent = data.desc || "-";
+        document.getElementById("drawerBomIdVal").textContent = data.bomid || "-";
+        document.getElementById("drawerJob").textContent = data.job || "-";
+        document.getElementById("drawerPo").textContent = data.po || "-";
+        document.getElementById("drawerReceiver").textContent = data.receiver || "-";
+        document.getElementById("drawerVendor").textContent = data.vendor || "-";
+
+        document.getElementById("drawerHeatFull").textContent = `🔥 ${data.heat || "None"}`;
+        document.getElementById("drawerBinFull").textContent = `📦 ${data.bin || "Unassigned"}`;
+        document.getElementById("drawerStatus").textContent = `● ${data.status || "Received"}`;
+        document.getElementById("drawerRecvBy").textContent = data.recvBy || "-";
+        document.getElementById("drawerRecvDate").textContent = data.recvDate || "-";
+
+        const drawer = document.getElementById("hsDrawer");
+        const backdrop = document.getElementById("hsDrawerBackdrop");
+        if (drawer) drawer.classList.add("active");
+        if (backdrop) backdrop.classList.add("active");
+    }
+
+    // 2. Close Drawer
+    function closeMaterialDrawer() {
+        const drawer = document.getElementById("hsDrawer");
+        const backdrop = document.getElementById("hsDrawerBackdrop");
+        if (drawer) drawer.classList.remove("active");
+        if (backdrop) backdrop.classList.remove("active");
+    }
+
+    // 3. Row Checkbox & Bulk Actions
+    function handleRowCheckboxChange(cb) {
+        const tr = cb.closest("tr");
+        if (cb.checked) {
+            tr?.classList.add("selected");
+        } else {
+            tr?.classList.remove("selected");
+        }
+        updateBulkBar();
+    }
+
+    function handleSelectAllChange(master) {
+        const isChecked = master.checked;
+        document.querySelectorAll(".hs-row-checkbox").forEach(cb => {
+            const tr = cb.closest("tr");
+            if (tr && tr.style.display !== "none") {
+                cb.checked = isChecked;
+                if (isChecked) tr.classList.add("selected");
+                else tr.classList.remove("selected");
+            }
+        });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checkedBoxes = document.querySelectorAll(".hs-row-checkbox:checked");
+        const count = checkedBoxes.length;
+        const bar = document.getElementById("hsBulkActions");
+        const countSpan = document.getElementById("hsSelectedCount");
+        const selectAll = document.getElementById("hsSelectAll");
+
+        if (countSpan) countSpan.textContent = count;
+        if (bar) {
+            if (count > 0) {
+                bar.classList.add("active");
+            } else {
+                bar.classList.remove("active");
+            }
+        }
+        const visibleBoxes = Array.from(document.querySelectorAll(".hs-row-checkbox"))
+            .filter(cb => cb.closest("tr") && cb.closest("tr").style.display !== "none");
+        
+        if (selectAll && visibleBoxes.length > 0) {
+            selectAll.checked = count > 0 && count === visibleBoxes.length;
+            selectAll.indeterminate = count > 0 && count < visibleBoxes.length;
+        }
+    }
+
+    function deselectAllRows() {
+        document.querySelectorAll(".hs-row-checkbox").forEach(cb => {
+            cb.checked = false;
+            cb.closest("tr")?.classList.remove("selected");
+        });
+        const selectAll = document.getElementById("hsSelectAll");
+        if (selectAll) selectAll.checked = false;
+        updateBulkBar();
+    }
+
+    // 4. View Tabs
+    function selectViewTab(tabEl, viewVal) {
+        document.querySelectorAll(".hs-view-tab").forEach(t => t.classList.remove("active"));
+        tabEl.classList.add("active");
+        activeView = viewVal;
+        applyAllFilters();
+    }
+
+    // 5. Dropdown Filter Chips
+    function setFilter(type, val, displayLabel, anchorEl) {
+        const menu = anchorEl.closest(".dropdown-menu");
+        menu.querySelectorAll("a").forEach(a => a.classList.remove("active"));
+        anchorEl.classList.add("active");
+
+        const btn = document.getElementById(`${type}FilterBtn`);
+        const label = document.getElementById(`${type}FilterLabel`);
+        if (label) label.textContent = displayLabel.replace("🔥 ", "").replace("Job ", "").replace("Bin ", "");
+        if (btn) {
+            if (val) btn.classList.add("active");
+            else btn.classList.remove("active");
+        }
+
+        if (type === "job") filterJob = val;
+        if (type === "vendor") filterVendor = val;
+        if (type === "bin") filterBin = val;
+        if (type === "heat") filterHeat = val;
+
+        applyAllFilters();
+    }
+
+    // 6. Multi-filter & Search Logic
+    function applyAllFilters() {
+        const searchInput = document.getElementById("hsSearchInput");
+        const query = (searchInput?.value || "").toLowerCase().trim();
+        const rows = document.querySelectorAll(".hs-row");
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const d = row.dataset;
+            const job = d.job || "";
+            const po = (d.po || "").toLowerCase();
+            const receiver = (d.receiver || "").toLowerCase();
+            const vendor = d.vendor || "";
+            const desc = (d.desc || "").toLowerCase();
+            const bomid = (d.bomid || "").toLowerCase();
+            const heat = d.heat || "";
+            const bin = d.bin || "";
+
+            // View check
+            let matchesView = true;
+            if (activeView !== "all" && job !== activeView) {
+                matchesView = false;
+            }
+
+            // Dropdown checks
+            const matchesJob = !filterJob || job === filterJob;
+            const matchesVendor = !filterVendor || vendor === filterVendor;
+            const matchesBin = !filterBin || bin === filterBin;
+            const matchesHeat = !filterHeat || heat === filterHeat;
+
+            // Query check
+            const matchesQuery = !query ||
+                job.toLowerCase().includes(query) ||
+                po.includes(query) ||
+                receiver.includes(query) ||
+                vendor.toLowerCase().includes(query) ||
+                desc.includes(query) ||
+                bomid.includes(query) ||
+                heat.toLowerCase().includes(query) ||
+                bin.toLowerCase().includes(query);
+
+            if (matchesView && matchesJob && matchesVendor && matchesBin && matchesHeat && matchesQuery) {
+                row.style.display = "";
+                visibleCount++;
+            } else {
+                row.style.display = "none";
+                const cb = row.querySelector(".hs-row-checkbox");
+                if (cb) {
+                    cb.checked = false;
+                    row.classList.remove("selected");
+                }
+            }
+        });
+
+        const visibleSpan = document.getElementById("hsVisibleCount");
+        const footerSpan = document.getElementById("hsFooterCount");
+        if (visibleSpan) visibleSpan.textContent = visibleCount;
+        if (footerSpan) footerSpan.textContent = visibleCount;
+        updateBulkBar();
+    }
+
+    // 7. Reset Filters
+    function resetAllFilters() {
+        const searchInput = document.getElementById("hsSearchInput");
+        if (searchInput) searchInput.value = "";
+        filterJob = "";
+        filterVendor = "";
+        filterBin = "";
+        filterHeat = "";
+
+        document.getElementById("jobFilterLabel").textContent = "All";
+        document.getElementById("vendorFilterLabel").textContent = "All";
+        document.getElementById("binFilterLabel").textContent = "All";
+        document.getElementById("heatFilterLabel").textContent = "All";
+
+        document.querySelectorAll(".hs-filter-btn").forEach(btn => btn.classList.remove("active"));
+        document.querySelectorAll(".dropdown-menu a").forEach(a => a.classList.remove("active"));
+        document.querySelectorAll(".dropdown-menu li:first-child a").forEach(a => a.classList.add("active"));
+
+        const firstTab = document.querySelector(".hs-view-tab");
+        if (firstTab) selectViewTab(firstTab, "all");
+        else applyAllFilters();
+    }
+
+    // 8. CSV Export
+    function exportToCsv() {
+        let csv = "Job #,PO #,Receiver ID,BOMID,Description,Vendor,Heat #,Bin Location,Qty Shipped,Qty Received,Unit,Status\n";
+        document.querySelectorAll(".hs-row").forEach(row => {
+            if (row.style.display !== "none") {
+                const d = row.dataset;
+                csv += `"${d.job}","${d.po}","${d.receiver}","${d.bomid}","${d.desc}","${d.vendor}","${d.heat}","${d.bin}","${d.qtyShip}","${d.qtyRecv}","${d.unit}","${d.status}"\n`;
+            }
+        });
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `MaterialsAlstar_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+}

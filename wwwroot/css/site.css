@@ -337,14 +337,17 @@ body.hubspot-body {
   display: none;
   background-color: var(--hs-navy);
   color: #fff;
-  padding: 8px 24px;
+  padding: 10px 24px;
   align-items: center;
   justify-content: space-between;
   border-bottom: 2px solid var(--hs-coral);
+  position: sticky;
+  top: 52px;
+  z-index: 1020;
   animation: slideDown 0.2s ease;
 }
 .hs-bulk-actions.active {
-  display: flex;
+  display: flex !important;
 }
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
@@ -458,6 +461,7 @@ body.hubspot-body {
 }
 .hs-drawer-backdrop.active {
   display: block;
+  display: block !important;
 }
 
 .hs-drawer {
@@ -476,6 +480,7 @@ body.hubspot-body {
 }
 .hs-drawer.active {
   right: 0;
+  right: 0 !important;
 }
 
 .hs-drawer-header {
