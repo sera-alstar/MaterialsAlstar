@@ -702,3 +702,43 @@ body.hubspot-body {
   font-size: 13px;
   color: var(--hs-text-muted);
 }
+
+/* ---------------------------------------------
+   Yard Staging & Receiving Badges
+   --------------------------------------------- */
+.badge-staging {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #ebf5ff;
+  color: #0066cc;
+  border: 1px solid #cce5ff;
+}
+
+.badge-staging-walkway {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.badge-staging-bay {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.badge-staging-racks {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid #e9d5ff;
+}
+
+.badge-staging-quarantine {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}

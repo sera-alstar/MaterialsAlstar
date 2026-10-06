@@ -25,7 +25,9 @@
                     <a asp-page="/OrderingLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/OrderingLog" ? "active" : "")">
                         <i class="bi bi-clock-history me-1"></i> Ordering Log (Expected)
                     </a>
-                    <a href="#" class="hs-nav-item">Receiving Logs</a>
+                    <a asp-page="/ReceivingLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/ReceivingLog" ? "active" : "")">
+                        <i class="bi bi-geo-alt me-1"></i> Receiving Log (Yard)
+                    </a>
                     <a href="#" class="hs-nav-item">Heat Numbers (MTR)</a>
                     <a href="#" class="hs-nav-item">Warehouse Bins</a>
                     <a href="#" class="hs-nav-item">Reports</a>

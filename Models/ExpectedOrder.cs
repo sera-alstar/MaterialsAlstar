@@ -24,4 +24,13 @@ public class ExpectedOrder
     public string RecId { get; set; } = string.Empty;
     public string DriveLink { get; set; } = string.Empty;
     public bool IsStructural { get; set; }
+    public string JpKey => string.IsNullOrEmpty(JobNumber) ? PoNumber : $"{JobNumber}{PoNumber}";
+    public string? BolNumber { get; set; }
+    public string? StagingLocation { get; set; }
+    public int? PalletCount { get; set; }
+    public int? CrateCount { get; set; }
+    public int? BoxCount { get; set; }
+    public string? PhotoPath { get; set; }
 }
+
+

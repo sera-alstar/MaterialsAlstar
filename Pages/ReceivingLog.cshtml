@@ -1,0 +1,778 @@
+@page
+@model MaterialsAlstar.Pages.ReceivingLogModel
+@{
+    ViewData["Title"] = "Receiving Log (Landed Shipments)";
+}
+
+<!-- Notification Banners -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill fs-4 me-2 text-success"></i>
+            <div>
+                <strong>Success:</strong> @TempData["SuccessMessage"]
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<!-- Page Sub-Header / Breadcrumb -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a asp-page="/Index">Materials &amp; QC</a> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span>Shipping &amp; Receiving</span> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span class="text-dark fw-semibold">Receiving Log (Landed in Yard)</span>
+    </div>
+
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="hs-page-title mb-0">
+                Receiving Log
+                <span class="hs-count-badge">@Model.TotalLandedCount Landed</span>
+            </h1>
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
+                <i class="bi bi-geo-alt-fill me-1"></i> Physical Yard Check-In Queue
+            </span>
+            @if (Model.TotalAdminPendingCount > 0)
+            {
+                <span class="badge bg-warning text-dark border border-warning px-2 py-1 small">
+                    <i class="bi bi-shield-exclamation me-1"></i> @Model.TotalAdminPendingCount Pending Admin Verification
+                </span>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <a asp-page="/OrderingLog" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-clock-history me-1"></i> View Expected Orders
+            </a>
+            <button class="hs-btn-secondary" type="button" onclick="exportReceivingLogToCsv()">
+                <i class="bi bi-download me-1"></i> Export CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Materials Admin Verification Queue (Alert Section for Ad-Hoc / Unscheduled Shipments) -->
+@if (Model.AdminPendingShipments.Count > 0)
+{
+    <div class="px-3 pt-3">
+        <div class="card border-warning shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-warning-subtle text-dark border-bottom border-warning d-flex align-items-center justify-content-between py-2 px-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-lock-fill text-warning fs-5"></i>
+                    <div>
+                        <strong class="fs-6">Materials Admin Verification Queue</strong>
+                        <span class="badge bg-warning text-dark rounded-pill ms-2">@Model.AdminPendingShipments.Count shipments awaiting review</span>
+                    </div>
+                </div>
+                <span class="text-muted small">
+                    Unscheduled or client-supplied arrivals must be verified before official receiving
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Arrived</th>
+                            <th>Temporary Key</th>
+                            <th>Vendor</th>
+                            <th>PO #</th>
+                            <th>Job # (Status)</th>
+                            <th>Packing Slip / BOL</th>
+                            <th>Packages</th>
+                            <th>Load Type</th>
+                            <th>Staging</th>
+                            <th>Photo</th>
+                            <th>Notes</th>
+                            <th style="text-align: right;">Admin Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.AdminPendingShipments)
+                        {
+                            <tr>
+                                <td>@p.ArrivalDateTime.ToString("MMM d, h:mm tt")</td>
+                                <td><span class="badge bg-secondary font-monospace">@p.JpKey</span></td>
+                                <td class="fw-bold">@p.VendorName</td>
+                                <td class="font-monospace">@p.PoNumber</td>
+                                <td>
+                                    @if (string.IsNullOrEmpty(p.JobNumber))
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                            <i class="bi bi-question-circle me-1"></i> Missing / Client Supplied
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-dark-subtle text-dark">@p.JobNumber</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="font-monospace small">PS: @p.PackingSlipNumber</div>
+                                    <div class="font-monospace text-muted" style="font-size: 11px;">BOL: @p.BolNumber</div>
+                                </td>
+                                <td>@p.PackageSummary</td>
+                                <td><span class="badge bg-light text-dark border">@p.LoadType</span></td>
+                                <td><span class="badge bg-info-subtle text-dark">📍 @p.StagingLocation</span></td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(p.PhotoPath))
+                                    {
+                                        <a href="@p.PhotoPath" target="_blank" title="View shipment photo">
+                                            <img src="@p.PhotoPath" class="rounded border" style="width: 38px; height: 38px; object-fit: cover;" alt="Photo" />
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted fst-italic" style="font-size: 11px;">No photo</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 150px;" title="@p.Notes">
+                                        @p.Notes
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold"
+                                            onclick="openAdminVerifyModal(@p.Id, '@p.PoNumber', '@Html.Raw(p.VendorName)', '@(p.JobNumber ?? "")', '@p.PackingSlipNumber', '@p.BolNumber', '@p.LoadType', '@p.StagingLocation', '@Html.Raw(p.Notes ?? "")')">
+                                        <i class="bi bi-pencil-square me-1"></i> Review &amp; Verify
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="px-3 pt-3">
+    <div class="row g-3">
+        <!-- Total Landed -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-success">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Total Landed in Yard</span>
+                    <i class="bi bi-geo-alt-fill text-success fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-success">@Model.TotalLandedCount</span>
+                    <span class="text-muted small">shipments</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Physically arrived &bull; Awaiting receiving
+                </div>
+            </div>
+        </div>
+
+        <!-- Pallet & Box Volume -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-primary">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Staged Volume</span>
+                    <i class="bi bi-box-seam text-primary fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.TotalPalletsCount</span>
+                    <span class="text-muted small">pallets, @Model.TotalBoxesCount boxes</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Across Walkway, Bays &amp; Racks
+                </div>
+            </div>
+        </div>
+
+        <!-- In Inspection -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-info">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">In Physical Inspection</span>
+                    <i class="bi bi-clipboard-check text-info fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-info">@Model.TotalInInspectionCount</span>
+                    <span class="text-muted small">active</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Receiver assigned &bull; MRR in progress
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Verification Pending -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 @(Model.TotalAdminPendingCount > 0 ? "border-warning" : "border-secondary")">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Admin Queue</span>
+                    <i class="bi bi-shield-check @(Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-muted") fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold @(Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-dark")">@Model.TotalAdminPendingCount</span>
+                    <span class="text-muted small">pending review</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Unscheduled / client-supplied entries
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar: Search, Filters & Grouping Toggle -->
+<div class="hs-toolbar px-3 py-2 mt-3">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Search Input -->
+            <div class="hs-search-box position-relative" style="min-width: 320px;">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
+                <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
+                       class="form-control form-control-sm ps-4" 
+                       placeholder="Search JP Key, Job#, PO#, Vendor, BOL..." />
+            </div>
+
+            <!-- Grouping Switcher Buttons (Primary Workflow Feature) -->
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="submit" name="GroupBy" value="loadtype" 
+                        class="btn @(Model.GroupBy == "loadtype" ? "btn-primary text-white" : "btn-outline-secondary")"
+                        title="Group similar items (SNG, Pipe, Valves) together for concurrent receiving">
+                    <i class="bi bi-collection me-1"></i> Group by Load Type
+                </button>
+                <button type="submit" name="GroupBy" value="staging" 
+                        class="btn @(Model.GroupBy == "staging" ? "btn-primary text-white" : "btn-outline-secondary")"
+                        title="Group by yard location (Walkway, Bay 1) to receive adjacent shipments">
+                    <i class="bi bi-geo-alt me-1"></i> Group by Location
+                </button>
+                <button type="submit" name="GroupBy" value="job" 
+                        class="btn @(Model.GroupBy == "job" ? "btn-primary text-white" : "btn-outline-secondary")"
+                        title="Group by Job # for project package fulfillment">
+                    <i class="bi bi-briefcase me-1"></i> Group by Job #
+                </button>
+                <button type="submit" name="GroupBy" value="flat" 
+                        class="btn @(Model.GroupBy == "flat" ? "btn-primary text-white" : "btn-outline-secondary")"
+                        title="Flat table sorted by JP Key">
+                    <i class="bi bi-list-ul me-1"></i> All
+                </button>
+            </div>
+
+            <!-- Staging Location Filter Dropdown -->
+            <select name="StagingFilter" class="form-select form-select-sm" style="width: 170px;" onchange="this.form.submit()">
+                <option value="">All Locations (@Model.StagingLocationOptions.Count)</option>
+                @foreach (var s in Model.StagingLocationOptions)
+                {
+                    <option value="@s" selected="@(Model.StagingFilter == s)">📍 @s</option>
+                }
+            </select>
+
+            <!-- Load Type Filter Dropdown -->
+            <select name="LoadTypeFilter" class="form-select form-select-sm" style="width: 180px;" onchange="this.form.submit()">
+                <option value="">All Load Types (@Model.LoadTypeOptions.Count)</option>
+                @foreach (var lt in Model.LoadTypeOptions)
+                {
+                    <option value="@lt" selected="@(Model.LoadTypeFilter == lt)">@lt</option>
+                }
+            </select>
+
+            <!-- Status Filter Dropdown -->
+            <select name="StatusFilter" class="form-select form-select-sm" style="width: 175px;" onchange="this.form.submit()">
+                <option value="active" selected="@(Model.StatusFilter == "active")">🟡 Active in Yard</option>
+                <option value="all" selected="@(Model.StatusFilter == "all")">📋 All (Inc. Completed)</option>
+                <option value="completed" selected="@(Model.StatusFilter == "completed")">✅ Completed Only</option>
+            </select>
+
+            <button type="submit" class="hs-btn-primary btn-sm py-1">
+                <i class="bi bi-funnel"></i> Apply
+            </button>
+
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.StagingFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter))
+            {
+                <a asp-page="/ReceivingLog" asp-route-GroupBy="@Model.GroupBy" class="text-decoration-none text-danger small ms-1">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">
+                Order within groups: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>
+            </span>
+        </div>
+    </form>
+</div>
+
+<!-- Main Grouped Receiving Log Content -->
+<div class="px-3 pb-5">
+    @if (Model.Groups.Count == 0 || Model.Groups.All(g => g.Items.Count == 0))
+    {
+        <div class="hs-table-container rounded-3 p-5 text-center bg-white shadow-sm">
+            <i class="bi bi-inbox fs-1 text-secondary mb-2 d-block"></i>
+            <h5>No landed shipments found in the Receiving Log</h5>
+            <p class="text-muted small mb-3">Accept expected shipments from the Ordering Log to check them into the yard.</p>
+            <a asp-page="/OrderingLog" class="btn btn-primary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i> Go to Expected Ordering Log
+            </a>
+        </div>
+    }
+    else
+    {
+        @foreach (var group in Model.Groups.Where(g => g.Items.Count > 0))
+        {
+            <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden bg-white">
+                <!-- Group Header -->
+                <div class="p-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 bg-light">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge @group.BadgeClass fs-6 px-2 py-1">
+                            <i class="bi @group.IconClass me-1"></i> @group.GroupTitle
+                        </span>
+                        <div class="d-flex align-items-center gap-2 small text-muted">
+                            <span class="fw-bold text-dark">@group.TotalShipments</span> shipments &bull;
+                            <span>@group.TotalPallets Pallets</span> &bull;
+                            <span>@group.TotalCrates Crates</span> &bull;
+                            <span>@group.TotalBoxes Boxes</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-secondary-subtle text-secondary border small">
+                            <i class="bi bi-sort-numeric-down me-1"></i> Ordered by JP Key &bull; Job # &bull; Staging
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Group Table -->
+                <div class="table-responsive">
+                    <table class="hs-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 140px;">JP Key</th>
+                                <th style="width: 105px;">Job #</th>
+                                <th style="width: 95px;">PO #</th>
+                                <th>Vendor</th>
+                                <th>Packing Slip #</th>
+                                <th>BOL #</th>
+                                <th>Packages</th>
+                                <th>Load Type</th>
+                                <th style="width: 175px;">Staging Location</th>
+                                <th style="width: 140px;">Landed Time</th>
+                                <th style="width: 65px;">Photo</th>
+                                <th style="width: 135px;">Status</th>
+                                <th style="width: 120px; text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in group.Items)
+                            {
+                                <tr onclick="openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
+                                    <!-- JP Key -->
+                                    <td>
+                                        <span class="badge bg-dark font-monospace fw-bold fs-6">@item.JpKey</span>
+                                        @if (!string.IsNullOrEmpty(item.ClientName))
+                                        {
+                                            <div class="text-muted" style="font-size: 11px;">@item.ClientName</div>
+                                        }
+                                    </td>
+
+                                    <!-- Job # -->
+                                    <td>
+                                        @if (string.IsNullOrEmpty(item.JobNumber))
+                                        {
+                                            <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">Client Supp.</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="hs-badge-job">@item.JobNumber</span>
+                                        }
+                                    </td>
+
+                                    <!-- PO # -->
+                                    <td>
+                                        <span class="fw-bold font-monospace text-dark">@item.PoNumber</span>
+                                    </td>
+
+                                    <!-- Vendor -->
+                                    <td>
+                                        <div class="fw-semibold text-dark">@item.VendorName</div>
+                                    </td>
+
+                                    <!-- Packing Slip # -->
+                                    <td>
+                                        <span class="badge bg-light text-dark border font-monospace">@item.PackingSlipNumber</span>
+                                    </td>
+
+                                    <!-- BOL # -->
+                                    <td>
+                                        <span class="text-muted font-monospace small">@item.BolNumber</span>
+                                    </td>
+
+                                    <!-- Package Breakdown -->
+                                    <td>
+                                        <span class="small fw-semibold text-dark">@item.PackageSummary</span>
+                                    </td>
+
+                                    <!-- Load Type -->
+                                    <td>
+                                        <span class="badge bg-light text-dark border small">@item.LoadType</span>
+                                    </td>
+
+                                    <!-- Staging Location -->
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">
+                                            📍 @item.StagingLocation
+                                        </span>
+                                    </td>
+
+                                    <!-- Arrival Time -->
+                                    <td>
+                                        <div class="small fw-medium text-dark">@item.ArrivalDateTime.ToString("MMM d, h:mm tt")</div>
+                                    </td>
+
+                                    <!-- Photo Thumbnail -->
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.PhotoPath))
+                                        {
+                                            <a href="@item.PhotoPath" target="_blank" onclick="event.stopPropagation();" title="View full photo">
+                                                <img src="@item.PhotoPath" class="rounded border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;" alt="Photo" />
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted" style="font-size: 11px;">--</span>
+                                        }
+                                    </td>
+
+                                    <!-- Status -->
+                                    <td>
+                                        @if (item.Status == "In Inspection")
+                                        {
+                                            <span class="badge bg-info-subtle text-dark border border-info-subtle small">
+                                                <i class="bi bi-search me-1"></i> Inspecting
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(item.ReceiverName))
+                                            {
+                                                <div class="text-muted" style="font-size: 10px;">@item.ReceiverName</div>
+                                            }
+                                        }
+                                        else if (item.Status == "Complete")
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle small">
+                                                <i class="bi bi-check-all me-1"></i> Received
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-dark border border-warning-subtle small">
+                                                <i class="bi bi-geo-alt me-1"></i> In Yard
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <!-- Action -->
+                                    <td style="text-align: right;">
+                                        @if (item.Status != "Complete" && item.Status != "In Inspection")
+                                        {
+                                            <form method="post" asp-page-handler="StartInspection" class="d-inline" onclick="event.stopPropagation();">
+                                                <input type="hidden" name="entryId" value="@item.Id" />
+                                                <input type="hidden" name="receiverName" value="SR Inspector" />
+                                                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" title="Assign receiver &amp; start inspection">
+                                                    Inspect
+                                                </button>
+                                            </form>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 ms-1"
+                                                onclick="event.stopPropagation(); openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Slide-Out Drawer for Landed Shipment Details -->
+<div class="hs-drawer-backdrop" id="recDrawerBackdrop" onclick="closeReceivingDrawer()"></div>
+<div class="hs-drawer" id="recDrawer">
+    <div class="p-3 border-bottom d-flex align-items-center justify-content-between bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-dark font-monospace fs-6" id="recDrawerJpKey">JP Key</span>
+            <h6 class="mb-0 fw-bold" id="recDrawerVendor">Vendor</h6>
+        </div>
+        <button type="button" class="btn-close small" onclick="closeReceivingDrawer()"></button>
+    </div>
+
+    <div class="p-4 flex-grow-1 overflow-auto">
+        <!-- Yard Location Callout -->
+        <div class="p-3 mb-3 rounded-2 bg-success-subtle border border-success-subtle d-flex align-items-center justify-content-between">
+            <div>
+                <div class="text-muted small">Current Yard Staging Location</div>
+                <div class="fw-bold fs-6 text-success" id="recDrawerStaging">Walkway</div>
+            </div>
+            <div>
+                <i class="bi bi-geo-alt-fill fs-2 text-success"></i>
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted fw-bold small mb-3">Receiving &amp; Freight Particulars</h6>
+        <div class="row g-3 small mb-4">
+            <div class="col-6">
+                <label class="text-muted d-block">Job Number</label>
+                <span class="fw-bold fs-6" id="recDrawerJob">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">PO Number</label>
+                <span class="fw-bold fs-6 font-monospace" id="recDrawerPo">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Packing Slip #</label>
+                <span class="badge bg-light text-dark border font-monospace" id="recDrawerSlip">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">BOL #</label>
+                <span class="font-monospace fw-semibold" id="recDrawerBol">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Load Type</label>
+                <span class="badge bg-secondary-subtle text-dark" id="recDrawerLoadType">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Package Count</label>
+                <span class="fw-bold" id="recDrawerPackages">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Arrived in Yard</label>
+                <span class="fw-semibold text-dark" id="recDrawerArrival">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Receiving Status</label>
+                <span class="badge bg-warning-subtle text-dark" id="recDrawerStatus">--</span>
+            </div>
+        </div>
+
+        <!-- Photo Section -->
+        <div id="recDrawerPhotoSection" class="mb-4 d-none">
+            <h6 class="text-uppercase text-muted fw-bold small mb-2">Shipment Photo / BOL Capture</h6>
+            <div class="p-2 border rounded-2 bg-light text-center">
+                <a id="recDrawerPhotoLink" href="#" target="_blank">
+                    <img id="recDrawerPhotoImg" src="#" alt="Shipment Photo" class="img-fluid rounded" style="max-height: 220px; object-fit: contain;" />
+                </a>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <h6 class="text-uppercase text-muted fw-bold small mb-2">Staging &amp; Driver Notes</h6>
+        <div class="p-3 bg-light rounded-2 border text-muted small mb-4" id="recDrawerNotes">
+            No notes specified.
+        </div>
+
+        <!-- Relocate Shipment Quick Action -->
+        <div class="p-3 bg-light rounded-2 border">
+            <h6 class="fw-bold small mb-2"><i class="bi bi-arrows-move me-1"></i> Relocate in Yard</h6>
+            <form method="post" asp-page-handler="UpdateStaging" class="d-flex gap-2">
+                <input type="hidden" name="entryId" id="recDrawerEntryId" />
+                <select name="newStagingLocation" class="form-select form-select-sm">
+                    <option value="Walkway">Walkway</option>
+                    <option value="Bay 1 - Receiving Floor">Bay 1 - Receiving Floor</option>
+                    <option value="Bay 2 - Fabrication Staging">Bay 2 - Fabrication Staging</option>
+                    <option value="Yard Row A - Pipe Racks">Yard Row A - Pipe Racks</option>
+                    <option value="Yard Row B - Large Equipment">Yard Row B - Large Equipment</option>
+                    <option value="Quarantine / Inspection Pad">Quarantine / Inspection Pad</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Relocate</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="p-3 border-top bg-light d-flex align-items-center justify-content-between">
+        <button type="button" class="hs-btn-secondary" onclick="closeReceivingDrawer()">Close</button>
+        <span class="text-muted small">Alstar Materials &amp; QC System</span>
+    </div>
+</div>
+
+<!-- Modal: Materials Admin Verification Modal -->
+<div class="modal fade" id="adminVerifyModal" tabindex="-1" aria-labelledby="adminVerifyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow">
+            <form method="post" asp-page-handler="ApproveShipment">
+                <input type="hidden" name="entryId" id="verifyEntryId" />
+
+                <div class="modal-header bg-warning-subtle border-bottom border-warning">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="adminVerifyModalLabel">
+                            <i class="bi bi-shield-check text-warning me-2"></i>Materials Admin Verification &amp; Approval
+                        </h5>
+                        <div class="text-muted small">Verify PO, assign Job #, and approve shipment into receiving queue</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border d-flex align-items-center justify-content-between p-3 rounded-2 mb-3">
+                        <div>
+                            <span class="text-muted small d-block">Vendor:</span>
+                            <span class="fw-bold fs-6" id="verifyVendor">--</span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">PO Number:</span>
+                            <span class="fw-bold fs-6 font-monospace text-primary" id="verifyPo">--</span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Packing Slip / BOL:</span>
+                            <span class="font-monospace" id="verifySlipBol">--</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Job # Assignment (Key requirement for client supplied) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">
+                                Assign Job # <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="jobNumber" id="verifyJobInput" class="form-control font-monospace" required
+                                   placeholder="e.g. 251078C" />
+                            <div class="form-text small">
+                                Assign Job # to generate standard JP Key (e.g. 251078C0091).
+                            </div>
+                        </div>
+
+                        <!-- Load Type -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Confirmed Load Type</label>
+                            <select name="assignedLoadType" id="verifyLoadTypeInput" class="form-select">
+                                <option value="SNG / Bolt-Up">🔩 SNG / Bolt-Up (Studs, Nuts, Gaskets)</option>
+                                <option value="Pipe">📏 Pipe</option>
+                                <option value="Valves">🚰 Valves</option>
+                                <option value="Flanges & Fittings">🔘 Flanges &amp; Fittings</option>
+                                <option value="Supports">🏗️ Supports</option>
+                                <option value="Electrical">⚡ Electrical</option>
+                                <option value="Instrumentation">📟 Instrumentation</option>
+                                <option value="General Materials">📦 General Materials / Misc</option>
+                            </select>
+                        </div>
+
+                        <!-- Staging Location Confirmation -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Yard Staging Location</label>
+                            <select name="stagingLocation" id="verifyStagingInput" class="form-select">
+                                <option value="Walkway">📍 Walkway (Immediate Receiving Pad)</option>
+                                <option value="Bay 1 - Receiving Floor">📍 Bay 1 - Receiving Floor</option>
+                                <option value="Bay 2 - Fabrication Staging">📍 Bay 2 - Fabrication Staging</option>
+                                <option value="Yard Row A - Pipe Racks">📍 Yard Row A - Pipe Racks</option>
+                                <option value="Yard Row B - Large Equipment">📍 Yard Row B - Large Equipment</option>
+                                <option value="Quarantine / Inspection Pad">📍 Quarantine / Inspection Pad</option>
+                            </select>
+                        </div>
+
+                        <!-- Admin Verification Notes -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Admin Verification Notes</label>
+                            <input type="text" name="adminNotes" class="form-control" placeholder="Verified with SCM / Job confirmed by PC" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success fw-bold">
+                        <i class="bi bi-check-circle me-1"></i> Approve &amp; Move to Receiving Queue
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function openReceivingDrawer(id, jpKey, job, po, vendor, packingSlip, bol, packages, loadType, staging, arrival, status, receiver, notes, photo) {
+        document.getElementById('recDrawerEntryId').value = id;
+        document.getElementById('recDrawerJpKey').innerText = jpKey;
+        document.getElementById('recDrawerVendor').innerText = vendor;
+        document.getElementById('recDrawerStaging').innerText = staging;
+        document.getElementById('recDrawerJob').innerText = job;
+        document.getElementById('recDrawerPo').innerText = po;
+        document.getElementById('recDrawerSlip').innerText = packingSlip;
+        document.getElementById('recDrawerBol').innerText = bol;
+        document.getElementById('recDrawerLoadType').innerText = loadType;
+        document.getElementById('recDrawerPackages').innerText = packages;
+        document.getElementById('recDrawerArrival').innerText = arrival;
+        document.getElementById('recDrawerStatus').innerText = status;
+        document.getElementById('recDrawerNotes').innerText = notes || 'No notes specified.';
+
+        var photoSection = document.getElementById('recDrawerPhotoSection');
+        if (photo && photo.trim() !== '') {
+            document.getElementById('recDrawerPhotoImg').src = photo;
+            document.getElementById('recDrawerPhotoLink').href = photo;
+            photoSection.classList.remove('d-none');
+        } else {
+            photoSection.classList.add('d-none');
+        }
+
+        document.getElementById('recDrawerBackdrop').classList.add('active');
+        document.getElementById('recDrawer').style.right = '0';
+    }
+
+    function closeReceivingDrawer() {
+        document.getElementById('recDrawerBackdrop').classList.remove('active');
+        document.getElementById('recDrawer').style.right = '-540px';
+    }
+
+    function openAdminVerifyModal(id, po, vendor, job, slip, bol, loadType, staging, notes) {
+        document.getElementById('verifyEntryId').value = id;
+        document.getElementById('verifyPo').innerText = po;
+        document.getElementById('verifyVendor').innerText = vendor;
+        document.getElementById('verifySlipBol').innerText = slip + ' / ' + bol;
+        document.getElementById('verifyJobInput').value = job || '';
+        document.getElementById('verifyLoadTypeInput').value = loadType || 'General Materials';
+        document.getElementById('verifyStagingInput').value = staging || 'Walkway';
+
+        var modal = new bootstrap.Modal(document.getElementById('adminVerifyModal'));
+        modal.show();
+    }
+
+    function exportReceivingLogToCsv() {
+        var tables = document.querySelectorAll('.hs-table');
+        var csv = [];
+        csv.push('"JP Key","Job #","PO #","Vendor","Packing Slip","BOL","Packages","Load Type","Staging Location","Landed Time","Status"');
+
+        tables.forEach(function(table) {
+            var rows = table.querySelectorAll('tbody tr');
+            rows.forEach(function(row) {
+                var cols = row.querySelectorAll('td');
+                if (cols.length >= 12) {
+                    var r = [];
+                    // Extract clean text from relevant columns
+                    r.push('"' + cols[0].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[1].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[2].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[3].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[4].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[5].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[6].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[7].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[8].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[9].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    r.push('"' + cols[11].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim() + '"');
+                    csv.push(r.join(','));
+                }
+            });
+        });
+
+        var csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+        var downloadLink = document.createElement('a');
+        downloadLink.download = 'Alstar_Yard_Receiving_Log.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }
+</script>
+}

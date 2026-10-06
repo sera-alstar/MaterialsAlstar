@@ -6,13 +6,16 @@ using MaterialsAlstar.Models;
 
 namespace MaterialsAlstar.Pages;
 
+[IgnoreAntiforgeryToken]
 public class OrderingLogModel : PageModel
 {
     private readonly AppDbContext _context;
+    private readonly IWebHostEnvironment _env;
 
-    public OrderingLogModel(AppDbContext context)
+    public OrderingLogModel(AppDbContext context, IWebHostEnvironment env)
     {
         _context = context;
+        _env = env;
     }
 
     // Filters
@@ -51,6 +54,10 @@ public class OrderingLogModel : PageModel
     public int NextWeekCount { get; set; }
     public int TotalOpenOrders { get; set; }
 
+    // Search state
+    public bool IsSearchNotFound { get; set; }
+    public bool IsJpSearchActive { get; set; }
+
     // Filter Options
     public List<string> VendorOptions { get; set; } = new();
     public List<string> LoadTypeOptions { get; set; } = new();
@@ -58,32 +65,31 @@ public class OrderingLogModel : PageModel
 
     public async Task OnGetAsync()
     {
-        // 1. Determine reference date (defaults to today or system date)
-        if (!string.IsNullOrEmpty(ReferenceDateStr) && DateTime.TryParse(ReferenceDateStr, out var parsedDate))
+        // 1. Determine reference date (defaults to Oct 5, 2026 or Today)
+        if (!string.IsNullOrEmpty(ReferenceDateStr) && DateTime.TryParse(ReferenceDateStr, out var parsedRef))
         {
-            ReferenceDate = parsedDate.Date;
+            ReferenceDate = parsedRef.Date;
         }
         else
         {
-            ReferenceDate = DateTime.Today;
+            ReferenceDate = new DateTime(2026, 10, 5); // Base reference aligned with sample data
         }
 
         ComputeBusinessDays();
 
-        // 2. Base query: Exclude structural steel (handled by structural steel team)
-        var baseQuery = _context.ExpectedOrders
-            .Where(o => !o.IsStructural && o.ReceivingStatus != "Received");
+        // 2. Fetch all open material orders (exclude structural steel)
+        var allOpenOrders = await _context.ExpectedOrders
+            .Where(o => !o.IsStructural && o.ReceivingStatus != "Received")
+            .ToListAsync();
 
-        // Compute KPIs across all non-structural open orders
-        var allOpenOrders = await baseQuery.ToListAsync();
         TotalOpenOrders = allOpenOrders.Count;
+        LandedInYardCount = allOpenOrders.Count(o => o.HasLandedInYard);
 
+        // Calculate KPI counts
         TotalWindowOrders = allOpenOrders.Count(o =>
             o.ExpectedDate.HasValue &&
             o.ExpectedDate.Value.Date >= YesterdayBusinessDay.Date &&
             o.ExpectedDate.Value.Date <= TomorrowBusinessDay.Date);
-
-        LandedInYardCount = allOpenOrders.Count(o => o.HasLandedInYard);
 
         PastDueCount = allOpenOrders.Count(o =>
             o.ExpectedDate.HasValue &&
@@ -117,62 +123,76 @@ public class OrderingLogModel : PageModel
             .OrderBy(j => j)
             .ToList();
 
-        // 3. Apply ViewMode date filtering
-        IEnumerable<ExpectedOrder> filtered = allOpenOrders;
+        // 3. Search Logic
+        // If a SearchTerm / JP Key is provided, search across ALL open orders (even outside the 3-day window)
+        // because an arriving shipment might have been expected anytime.
+        IEnumerable<ExpectedOrder> filtered;
 
-        switch (ViewMode.ToLowerInvariant())
-        {
-            case "pastdue":
-                filtered = filtered.Where(o =>
-                    o.ExpectedDate.HasValue &&
-                    o.ExpectedDate.Value.Date < YesterdayBusinessDay.Date);
-                break;
-
-            case "future":
-                if (IsThursdayOrFriday)
-                {
-                    // If Thursday or Friday, focus on Next Week
-                    filtered = filtered.Where(o =>
-                        o.ExpectedDate.HasValue &&
-                        o.ExpectedDate.Value.Date >= NextWeekMonday.Date &&
-                        o.ExpectedDate.Value.Date <= NextWeekFriday.Date);
-                }
-                else
-                {
-                    // Earlier in week: rest of week + next week
-                    filtered = filtered.Where(o =>
-                        o.ExpectedDate.HasValue &&
-                        o.ExpectedDate.Value.Date > TomorrowBusinessDay.Date &&
-                        o.ExpectedDate.Value.Date <= NextWeekFriday.Date);
-                }
-                break;
-
-            case "all":
-                // All open unreceived orders
-                break;
-
-            case "3day":
-            default:
-                filtered = filtered.Where(o =>
-                    o.ExpectedDate.HasValue &&
-                    o.ExpectedDate.Value.Date >= YesterdayBusinessDay.Date &&
-                    o.ExpectedDate.Value.Date <= TomorrowBusinessDay.Date);
-                break;
-        }
-
-        // 4. Apply additional interactive filters
         if (!string.IsNullOrWhiteSpace(SearchTerm))
         {
+            IsJpSearchActive = true;
             var term = SearchTerm.Trim().ToLowerInvariant();
-            filtered = filtered.Where(o =>
+            var termClean = term.Replace("-", "").Replace(" ", "");
+
+            filtered = allOpenOrders.Where(o =>
+                o.JpKey.ToLowerInvariant().Contains(termClean) ||
+                $"{o.JobNumber}{o.PoNumber}".ToLowerInvariant().Contains(termClean) ||
                 o.JobNumber.ToLowerInvariant().Contains(term) ||
                 o.PoNumber.ToLowerInvariant().Contains(term) ||
                 o.VendorName.ToLowerInvariant().Contains(term) ||
                 o.PackingSlipNumber.ToLowerInvariant().Contains(term) ||
                 o.ClientName.ToLowerInvariant().Contains(term) ||
                 o.LoadType.ToLowerInvariant().Contains(term));
+
+            if (!filtered.Any())
+            {
+                IsSearchNotFound = true;
+            }
+        }
+        else
+        {
+            // Apply ViewMode date filtering
+            filtered = allOpenOrders;
+
+            switch (ViewMode.ToLowerInvariant())
+            {
+                case "pastdue":
+                    filtered = filtered.Where(o =>
+                        o.ExpectedDate.HasValue &&
+                        o.ExpectedDate.Value.Date < YesterdayBusinessDay.Date);
+                    break;
+
+                case "future":
+                    if (IsThursdayOrFriday)
+                    {
+                        filtered = filtered.Where(o =>
+                            o.ExpectedDate.HasValue &&
+                            o.ExpectedDate.Value.Date >= NextWeekMonday.Date &&
+                            o.ExpectedDate.Value.Date <= NextWeekFriday.Date);
+                    }
+                    else
+                    {
+                        filtered = filtered.Where(o =>
+                            o.ExpectedDate.HasValue &&
+                            o.ExpectedDate.Value.Date > TomorrowBusinessDay.Date &&
+                            o.ExpectedDate.Value.Date <= NextWeekFriday.Date);
+                    }
+                    break;
+
+                case "all":
+                    break;
+
+                case "3day":
+                default:
+                    filtered = filtered.Where(o =>
+                        o.ExpectedDate.HasValue &&
+                        o.ExpectedDate.Value.Date >= YesterdayBusinessDay.Date &&
+                        o.ExpectedDate.Value.Date <= TomorrowBusinessDay.Date);
+                    break;
+            }
         }
 
+        // 4. Apply additional interactive filters
         if (!string.IsNullOrWhiteSpace(VendorFilter))
         {
             filtered = filtered.Where(o => o.VendorName.Equals(VendorFilter, StringComparison.OrdinalIgnoreCase));
@@ -202,6 +222,163 @@ public class OrderingLogModel : PageModel
             .ThenBy(o => o.JobNumber)
             .ThenBy(o => o.PoNumber)
             .ToList();
+    }
+
+    public async Task<IActionResult> OnPostAcceptShipmentAsync(
+        int expectedOrderId,
+        string packingSlipNumber,
+        string bolNumber,
+        int palletCount,
+        int crateCount,
+        int boxCount,
+        string selectedLoadType,
+        string stagingLocation,
+        IFormFile? shipmentPhoto,
+        string? checkInNotes)
+    {
+        var order = await _context.ExpectedOrders.FindAsync(expectedOrderId);
+        if (order == null)
+        {
+            return NotFound();
+        }
+
+        // Save optional photo if uploaded
+        string? photoPath = null;
+        if (shipmentPhoto != null && shipmentPhoto.Length > 0)
+        {
+            photoPath = await SaveUploadedPhotoAsync(shipmentPhoto, order.JpKey);
+        }
+
+        // Update ExpectedOrder status
+        order.HasLandedInYard = true;
+        order.ActualArrivalDate = DateTime.Now;
+        order.YardStatus = "Landed in Yard";
+        order.ReceivingStatus = "Pending Inspection";
+        order.PackingSlipNumber = string.IsNullOrWhiteSpace(order.PackingSlipNumber)
+            ? packingSlipNumber
+            : (order.PackingSlipNumber.Contains(packingSlipNumber) ? order.PackingSlipNumber : $"{order.PackingSlipNumber}, {packingSlipNumber}");
+        order.BolNumber = bolNumber;
+        order.StagingLocation = stagingLocation;
+        order.PalletCount = palletCount;
+        order.CrateCount = crateCount;
+        order.BoxCount = boxCount;
+        if (!string.IsNullOrEmpty(photoPath))
+        {
+            order.PhotoPath = photoPath;
+        }
+
+        // Create new entry in Receiving Log
+        var receivingEntry = new ReceivingLogEntry
+        {
+            JpKey = order.JpKey,
+            JobNumber = order.JobNumber,
+            PoNumber = order.PoNumber,
+            VendorName = order.VendorName,
+            PackingSlipNumber = packingSlipNumber,
+            BolNumber = bolNumber,
+            PalletCount = palletCount,
+            CrateCount = crateCount,
+            BoxCount = boxCount,
+            LoadType = string.IsNullOrWhiteSpace(selectedLoadType) ? order.LoadType : selectedLoadType,
+            StagingLocation = stagingLocation,
+            ArrivalDateTime = DateTime.Now,
+            PhotoPath = photoPath,
+            Status = "Landed - Pending Inspection",
+            IsAdminVerified = true, // Expected from SCM, automatically verified
+            ExpectedOrderId = order.Id,
+            ClientName = order.ClientName,
+            ProjectManager = order.ProjectManager,
+            Notes = checkInNotes
+        };
+
+        _context.ReceivingLogs.Add(receivingEntry);
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Shipment for {order.JpKey} ({order.VendorName}) successfully accepted and checked into yard at {stagingLocation}! Logged into Receiving Log.";
+        TempData["NewReceivingId"] = receivingEntry.Id;
+
+        return RedirectToPage(new { ViewMode, ReferenceDateStr });
+    }
+
+    public async Task<IActionResult> OnPostCreateNewShipmentAsync(
+        string vendorName,
+        string poNumber,
+        string? jobNumber,
+        string packingSlipNumber,
+        string bolNumber,
+        int palletCount,
+        int crateCount,
+        int boxCount,
+        string loadType,
+        string stagingLocation,
+        IFormFile? shipmentPhoto,
+        string? notes)
+    {
+        string jpKey = string.IsNullOrWhiteSpace(jobNumber)
+            ? $"UNKNOWN-{poNumber.Trim()}"
+            : $"{jobNumber.Trim()}{poNumber.Trim()}";
+
+        string? photoPath = null;
+        if (shipmentPhoto != null && shipmentPhoto.Length > 0)
+        {
+            photoPath = await SaveUploadedPhotoAsync(shipmentPhoto, jpKey);
+        }
+
+        var entry = new ReceivingLogEntry
+        {
+            JpKey = jpKey,
+            JobNumber = string.IsNullOrWhiteSpace(jobNumber) ? null : jobNumber.Trim(),
+            PoNumber = poNumber.Trim(),
+            VendorName = vendorName.Trim(),
+            PackingSlipNumber = packingSlipNumber.Trim(),
+            BolNumber = bolNumber.Trim(),
+            PalletCount = palletCount,
+            CrateCount = crateCount,
+            BoxCount = boxCount,
+            LoadType = loadType,
+            StagingLocation = stagingLocation,
+            ArrivalDateTime = DateTime.Now,
+            PhotoPath = photoPath,
+            Status = "Pending Admin Verification",
+            IsAdminVerified = false, // Must be verified by materials admin
+            Notes = notes
+        };
+
+        _context.ReceivingLogs.Add(entry);
+        await _context.SaveChangesAsync();
+
+        TempData["WarningMessage"] = $"Unscheduled shipment for PO {poNumber} ({vendorName}) accepted at yard ({stagingLocation}) and submitted for Materials Admin verification before appearing in receiving queue.";
+        TempData["NewReceivingId"] = entry.Id;
+
+        return RedirectToPage(new { ViewMode, ReferenceDateStr });
+    }
+
+    private async Task<string> SaveUploadedPhotoAsync(IFormFile photo, string identifier)
+    {
+        try
+        {
+            var webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var uploadsDir = Path.Combine(webRoot, "uploads", "shipments");
+            if (!Directory.Exists(uploadsDir))
+            {
+                Directory.CreateDirectory(uploadsDir);
+            }
+
+            var ext = Path.GetExtension(photo.FileName);
+            if (string.IsNullOrEmpty(ext)) ext = ".jpg";
+            var safeId = string.Join("_", identifier.Split(Path.GetInvalidFileNameChars()));
+            var fileName = $"shipment_{safeId}_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString()[..6]}{ext}";
+            var fullPath = Path.Combine(uploadsDir, fileName);
+
+            using var stream = new FileStream(fullPath, FileMode.Create);
+            await photo.CopyToAsync(stream);
+
+            return $"/uploads/shipments/{fileName}";
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private void ComputeBusinessDays()

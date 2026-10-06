@@ -152,6 +152,18 @@ public static class DbInitializer
                 context.SaveChanges();
             }
         }
+
+        if (!context.ReceivingLogs.Any())
+        {
+            var importService = new MaterialsAlstar.Services.ShipmentImportService();
+            var recLogs = importService.LoadReceivingLogs();
+            if (recLogs.Count > 0)
+            {
+                context.ReceivingLogs.AddRange(recLogs);
+                context.SaveChanges();
+            }
+        }
     }
 }
+
 

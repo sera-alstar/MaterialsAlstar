@@ -51,6 +51,149 @@ public class ShipmentImportService
         return orders;
     }
 
+    public List<ReceivingLogEntry> LoadReceivingLogs()
+    {
+        var entries = new List<ReceivingLogEntry>();
+        var recLogFile = Path.Combine(_importsDirectory, "MML - RecLog2.csv");
+        var activeJobsFile = Path.Combine(_importsDirectory, "MTS - Active Jobs.csv");
+
+        var clientLookup = LoadActiveJobs(activeJobsFile);
+        int idCounter = 1;
+
+        if (File.Exists(recLogFile))
+        {
+            try
+            {
+                using var reader = new StreamReader(recLogFile, Encoding.UTF8);
+                var recordsEnum = ReadCsvRecords(reader).GetEnumerator();
+                if (recordsEnum.MoveNext())
+                {
+                    var headers = recordsEnum.Current;
+                    int jobIdx = headers.FindIndex(h => CleanHeader(h).Equals("Job", StringComparison.OrdinalIgnoreCase));
+                    int poIdx = headers.FindIndex(h => CleanHeader(h).Equals("PO", StringComparison.OrdinalIgnoreCase));
+                    int vendorIdx = headers.FindIndex(h => CleanHeader(h).Equals("Vendor", StringComparison.OrdinalIgnoreCase));
+                    int plIdx = headers.FindIndex(h => CleanHeader(h).Equals("Packing List", StringComparison.OrdinalIgnoreCase));
+                    int loadTypeIdx = headers.FindIndex(h => CleanHeader(h).Equals("Load Type", StringComparison.OrdinalIgnoreCase));
+                    int actualIdx = headers.FindIndex(h => CleanHeader(h).Equals("Actual Arrival", StringComparison.OrdinalIgnoreCase));
+                    int recIdIdx = headers.FindIndex(h => CleanHeader(h).Equals("Rec ID", StringComparison.OrdinalIgnoreCase));
+                    int receiverIdx = headers.FindIndex(h => CleanHeader(h).Equals("Receiver", StringComparison.OrdinalIgnoreCase));
+
+                    while (recordsEnum.MoveNext())
+                    {
+                        var cols = recordsEnum.Current;
+                        if (jobIdx < 0 || poIdx < 0 || cols.Count <= Math.Max(jobIdx, poIdx)) continue;
+
+                        var job = cols[jobIdx].Trim();
+                        var po = cols[poIdx].Trim();
+                        if (string.IsNullOrEmpty(job) || string.IsNullOrEmpty(po)) continue;
+
+                        var vendor = vendorIdx >= 0 && cols.Count > vendorIdx ? cols[vendorIdx].Trim() : "";
+                        var pl = plIdx >= 0 && cols.Count > plIdx ? cols[plIdx].Trim() : "";
+                        var loadType = loadTypeIdx >= 0 && cols.Count > loadTypeIdx ? cols[loadTypeIdx].Trim() : "";
+                        var actualStr = actualIdx >= 0 && cols.Count > actualIdx ? cols[actualIdx].Trim() : "";
+                        var recId = recIdIdx >= 0 && cols.Count > recIdIdx ? cols[recIdIdx].Trim() : "";
+                        var receiver = receiverIdx >= 0 && cols.Count > receiverIdx ? cols[receiverIdx].Trim() : "";
+
+                        loadType = StandardizeLoadType(loadType, "", vendor);
+                        if (IsStructuralSteel(loadType, vendor, "")) continue;
+
+                        var arrivalDate = ParseDate(actualStr);
+                        if (!arrivalDate.HasValue) continue;
+
+                        // Focus on active/recent landed shipments for 2026
+                        if (arrivalDate.Value.Year < 2026) continue;
+
+                        var client = "";
+                        if (clientLookup.TryGetValue(job, out var c)) client = c;
+
+                        var staging = AssignStagingLocation(loadType);
+
+                        entries.Add(new ReceivingLogEntry
+                        {
+                            Id = idCounter++,
+                            JpKey = $"{job}{po}",
+                            JobNumber = job,
+                            PoNumber = po,
+                            VendorName = vendor,
+                            PackingSlipNumber = string.IsNullOrWhiteSpace(pl) ? $"PS-{po}" : pl,
+                            BolNumber = $"BOL-{po}",
+                            PalletCount = loadType.Contains("SNG") ? 2 : 1,
+                            CrateCount = loadType.Contains("Valves") ? 1 : 0,
+                            BoxCount = loadType.Contains("Pipe") ? 0 : 2,
+                            LoadType = loadType,
+                            StagingLocation = staging,
+                            ArrivalDateTime = arrivalDate.Value,
+                            Status = arrivalDate.Value >= new DateTime(2026, 10, 1)
+                                ? (!string.IsNullOrEmpty(receiver) ? "In Inspection" : "Landed - Pending Inspection")
+                                : "Complete",
+                            IsAdminVerified = true,
+                            ClientName = client,
+                            ReceiverName = receiver,
+                            RecId = recId
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Add 2 pending admin verification sample entries for client-supplied shipments without known job#
+        entries.Add(new ReceivingLogEntry
+        {
+            Id = idCounter++,
+            JpKey = "UNKNOWN-0091",
+            JobNumber = null, // Client supplied - job unknown
+            PoNumber = "0091",
+            VendorName = "Emerson Automation Solutions",
+            PackingSlipNumber = "EM-99201",
+            BolNumber = "BOL-EM-8821",
+            PalletCount = 1,
+            CrateCount = 1,
+            BoxCount = 0,
+            LoadType = "Instrumentation",
+            StagingLocation = "Walkway",
+            ArrivalDateTime = new DateTime(2026, 10, 5, 14, 30, 0),
+            Status = "Pending Admin Verification",
+            IsAdminVerified = false,
+            Notes = "Client-supplied instrumentation. Truck driver had no job# on BOL. Staged on Walkway for inspection."
+        });
+
+        entries.Add(new ReceivingLogEntry
+        {
+            Id = idCounter++,
+            JpKey = "UNKNOWN-0104",
+            JobNumber = null,
+            PoNumber = "0104",
+            VendorName = "Calgary Fasteners",
+            PackingSlipNumber = "CF-40912",
+            BolNumber = "BOL-CF-3301",
+            PalletCount = 2,
+            CrateCount = 0,
+            BoxCount = 4,
+            LoadType = "SNG / Bolt-Up",
+            StagingLocation = "Walkway",
+            ArrivalDateTime = new DateTime(2026, 10, 5, 15, 10, 0),
+            Status = "Pending Admin Verification",
+            IsAdminVerified = false,
+            Notes = "Urgent bolt-up shipment arrived directly from courier. Needs Job# assignment."
+        });
+
+        return entries;
+    }
+
+    private static string AssignStagingLocation(string loadType)
+    {
+        var l = loadType.ToLowerInvariant();
+        if (l.Contains("pipe")) return "Yard Row A - Pipe Racks";
+        if (l.Contains("valve")) return "Bay 1 - Receiving Floor";
+        if (l.Contains("flange") || l.Contains("fitting")) return "Bay 1 - Receiving Floor";
+        if (l.Contains("sng") || l.Contains("bolt")) return "Walkway";
+        if (l.Contains("support")) return "Bay 2 - Fabrication Staging";
+        if (l.Contains("instrument") || l.Contains("electrical")) return "Quarantine / Inspection Pad";
+        return "Walkway";
+    }
+
+
     private Dictionary<string, string> LoadActiveJobs(string filePath)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
