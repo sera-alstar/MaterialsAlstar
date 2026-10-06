@@ -1,0 +1,615 @@
+@page
+@model MaterialsAlstar.Pages.OrderingLogModel
+@{
+    ViewData["Title"] = "Expected Shipments & Ordering Log";
+
+    string GetRelativeClass(string relBadge)
+    {
+        return relBadge switch
+        {
+            "Today" => "badge-rel-today",
+            "Yesterday" => "badge-rel-yesterday",
+            "Tomorrow" => "badge-rel-tomorrow",
+            _ when relBadge.Contains("past") => "badge-rel-past",
+            _ => "badge-rel-future"
+        };
+    }
+}
+
+<!-- Page Sub-Header / Breadcrumb -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a asp-page="/Index">Materials &amp; QC</a> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span>Shipping &amp; Receiving</span> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span class="text-dark fw-semibold">Ordering Log (Expected Orders)</span>
+    </div>
+
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="hs-page-title mb-0">
+                Expected Shipments
+                <span class="hs-count-badge" id="recordCountBadge">@Model.Orders.Count shipments</span>
+            </h1>
+            <span class="badge bg-light text-muted border px-2 py-1 small">
+                <i class="bi bi-calendar-event me-1"></i> Monday &ndash; Friday receiving window
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- Date Context & Picker -->
+            <form method="get" class="d-flex align-items-center gap-2">
+                <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+                @if (!string.IsNullOrEmpty(Model.VendorFilter)) { <input type="hidden" name="VendorFilter" value="@Model.VendorFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.LoadTypeFilter)) { <input type="hidden" name="LoadTypeFilter" value="@Model.LoadTypeFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.YardStatusFilter)) { <input type="hidden" name="YardStatusFilter" value="@Model.YardStatusFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.SearchTerm)) { <input type="hidden" name="SearchTerm" value="@Model.SearchTerm" /> }
+
+                <div class="input-group input-group-sm" style="width: 250px;">
+                    <span class="input-group-text bg-white text-muted small"><i class="bi bi-calendar3"></i> As Of:</span>
+                    <input type="date" name="ReferenceDateStr" class="form-control form-control-sm" 
+                           value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
+                </div>
+
+                @if (Model.ReferenceDate.Date != DateTime.Today)
+                {
+                    <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" class="hs-btn-secondary btn-sm py-1 px-2" title="Reset to Today">
+                        <i class="bi bi-arrow-counterclockwise"></i> Today
+                    </a>
+                }
+            </form>
+
+            <button class="hs-btn-secondary" type="button" onclick="exportOrdersToCsv()">
+                <i class="bi bi-download me-1"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Window Context Alert Banner -->
+    <div class="d-flex align-items-center justify-content-between p-2 px-3 mt-2 rounded-2 bg-light border text-muted small">
+        <div class="d-flex align-items-center gap-3">
+            <span>
+                <i class="bi bi-info-circle text-primary me-1"></i>
+                <strong>Operational Reference Date:</strong> @Model.ReferenceDate.ToString("dddd, MMMM d, yyyy")
+            </span>
+            <span class="text-secondary">|</span>
+            <span>
+                <strong>3-Day Window:</strong> 
+                Yesterday (@Model.YesterdayBusinessDay.ToString("ddd, MMM d")), 
+                Today (@Model.ReferenceDate.ToString("ddd, MMM d")), 
+                Tomorrow (@Model.TomorrowBusinessDay.ToString("ddd, MMM d"))
+            </span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary-subtle text-secondary border">Structural Steel Excluded (Separate Handling)</span>
+        </div>
+    </div>
+
+    <!-- Saved View Navigation Tabs -->
+    <div class="hs-views-bar mt-3">
+        <!-- 3-Day Window (Default) -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="3day" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "3day" ? "active" : "")">
+            <i class="bi bi-calendar3-range"></i> 
+            3-Day Window (Yesterday, Today, Tomorrow) 
+            <span class="badge bg-primary text-white rounded-pill ms-1">@Model.TotalWindowOrders</span>
+        </a>
+
+        <!-- Past Due (> 1 Business Day) -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="pastdue" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "pastdue" ? "active" : "")">
+            <i class="bi bi-exclamation-octagon text-danger"></i> 
+            Past Due (&gt; 1 Day) 
+            <span class="badge @(Model.PastDueCount > 0 ? "bg-danger text-white" : "bg-secondary-subtle text-secondary") rounded-pill ms-1">@Model.PastDueCount</span>
+        </a>
+
+        <!-- Future / Rest of Week / Next Week -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="future" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "future" ? "active" : "")">
+            <i class="bi bi-arrow-right-circle text-info"></i> 
+            @(Model.IsThursdayOrFriday ? "Next Week (" + Model.NextWeekMonday.ToString("MMM d") + " - " + Model.NextWeekFriday.ToString("MMM d") + ")" : "Upcoming / Next Week")
+            <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.NextWeekCount</span>
+        </a>
+
+        <!-- All Open Orders -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="all" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "all" ? "active" : "")">
+            <i class="bi bi-list-check"></i> 
+            All Unreceived Orders 
+            <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.TotalOpenOrders</span>
+        </a>
+    </div>
+</div>
+
+<!-- KPI Summary Cards Row -->
+<div class="px-3 pt-3">
+    <div class="row g-3">
+        <!-- 3-Day Expected -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-primary">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Expected (3-Day Window)</span>
+                    <i class="bi bi-calendar3 text-primary fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.TotalWindowOrders</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    @Model.YesterdayBusinessDay.ToString("MMM d") &ndash; @Model.TomorrowBusinessDay.ToString("MMM d")
+                </div>
+            </div>
+        </div>
+
+        <!-- Landed in Yard (Awaiting Physical Receiving) -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-success">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Landed in Yard</span>
+                    <i class="bi bi-geo-alt-fill text-success fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-success">@Model.LandedInYardCount</span>
+                    <span class="text-muted small">in yard</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Arrived on-site &bull; Pending check-in
+                </div>
+            </div>
+        </div>
+
+        <!-- Past Due -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 @(Model.PastDueCount > 0 ? "border-danger" : "border-secondary")">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Past Due (&gt; 1 Day)</span>
+                    <i class="bi bi-clock-history @(Model.PastDueCount > 0 ? "text-danger" : "text-muted") fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold @(Model.PastDueCount > 0 ? "text-danger" : "text-dark")">@Model.PastDueCount</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Due before @Model.YesterdayBusinessDay.ToString("ddd, MMM d")
+                </div>
+            </div>
+        </div>
+
+        <!-- Next Week Forecast -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-info">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Next Week Forecast</span>
+                    <i class="bi bi-truck text-info fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.NextWeekCount</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    @Model.NextWeekMonday.ToString("MMM d") &ndash; @Model.NextWeekFriday.ToString("MMM d")
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar: Search, Filters & Yard Status -->
+<div class="hs-toolbar px-3 py-2 mt-3">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+        <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+        <input type="hidden" name="ReferenceDateStr" value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" />
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Search Input -->
+            <div class="hs-search-box position-relative" style="min-width: 260px;">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
+                <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
+                       class="form-control form-control-sm ps-4" 
+                       placeholder="Search Job, PO, Vendor, Packing Slip..." />
+            </div>
+
+            <!-- Vendor Filter Dropdown -->
+            <select name="VendorFilter" class="form-select form-select-sm" style="width: 170px;" onchange="this.form.submit()">
+                <option value="">All Vendors (@Model.VendorOptions.Count)</option>
+                @foreach (var v in Model.VendorOptions)
+                {
+                    <option value="@v" selected="@(Model.VendorFilter == v)">@v</option>
+                }
+            </select>
+
+            <!-- Load Type Filter Dropdown -->
+            <select name="LoadTypeFilter" class="form-select form-select-sm" style="width: 190px;" onchange="this.form.submit()">
+                <option value="">All Load Types (@Model.LoadTypeOptions.Count)</option>
+                @foreach (var lt in Model.LoadTypeOptions)
+                {
+                    <option value="@lt" selected="@(Model.LoadTypeFilter == lt)">@lt</option>
+                }
+            </select>
+
+            <!-- Yard Landing Status Filter Dropdown -->
+            <select name="YardStatusFilter" class="form-select form-select-sm" style="width: 160px;" onchange="this.form.submit()">
+                <option value="">All Yard Statuses</option>
+                <option value="InTransit" selected="@(Model.YardStatusFilter == "InTransit")">🚚 In Transit Only</option>
+                <option value="Landed" selected="@(Model.YardStatusFilter == "Landed")">📍 Landed in Yard Only</option>
+            </select>
+
+            <button type="submit" class="hs-btn-primary btn-sm py-1">
+                <i class="bi bi-funnel"></i> Apply
+            </button>
+
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.VendorFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter) || !string.IsNullOrEmpty(Model.YardStatusFilter))
+            {
+                <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")" class="text-decoration-none text-danger small ms-1">
+                    <i class="bi bi-x-circle"></i> Clear filters
+                </a>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">Showing @Model.Orders.Count shipments</span>
+        </div>
+    </form>
+</div>
+
+<!-- Main Table Container -->
+<div class="px-3 pb-4">
+    <div class="hs-table-container rounded-3 overflow-hidden shadow-sm">
+        <div class="table-responsive">
+            <table class="hs-table align-middle" id="orderingLogTable">
+                <thead>
+                    <tr>
+                        <th style="width: 105px;">Job #</th>
+                        <th style="width: 95px;">PO #</th>
+                        <th>Vendor</th>
+                        <th>Packing Slip #</th>
+                        <th>Load Type</th>
+                        <th style="width: 145px;">Expected Date</th>
+                        <th style="width: 155px;">Yard Status</th>
+                        <th>Receiving Status / Notes</th>
+                        <th style="width: 90px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Orders.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <div class="py-4">
+                                    <i class="bi bi-inbox fs-1 text-secondary mb-2 d-block"></i>
+                                    <h6>No shipments found matching this window or filter</h6>
+                                    <p class="small text-muted mb-3">Try clearing search filters or changing the reference date.</p>
+                                    <a asp-page="/OrderingLog" asp-route-ViewMode="3day" class="btn btn-sm btn-outline-primary">
+                                        Reset to Default 3-Day Window
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var order in Model.Orders)
+                        {
+                            var relBadge = Model.GetRelativeDateBadge(order.ExpectedDate);
+                            var relBadgeClass = GetRelativeClass(relBadge);
+                            var loadTypeClass = Model.GetLoadTypeBadgeClass(order.LoadType);
+
+                            <tr onclick="openOrderDrawer('@order.Id', '@order.JobNumber', '@order.PoNumber', '@order.VendorName', '@order.PackingSlipNumber', '@order.LoadType', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@order.Notes')">
+                                <!-- Job # with client -->
+                                <td>
+                                    <span class="hs-badge-job">@order.JobNumber</span>
+                                    @if (!string.IsNullOrEmpty(order.ClientName))
+                                    {
+                                        <div class="text-muted" style="font-size: 11px;">@order.ClientName</div>
+                                    }
+                                </td>
+
+                                <!-- PO # -->
+                                <td>
+                                    <span class="fw-bold text-dark font-monospace">@order.PoNumber</span>
+                                </td>
+
+                                <!-- Vendor -->
+                                <td>
+                                    <div class="fw-semibold text-dark">@order.VendorName</div>
+                                    @if (order.IsLongLead)
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning-subtle" style="font-size: 10px;">
+                                            <i class="bi bi-hourglass-split"></i> Long Lead
+                                        </span>
+                                    }
+                                </td>
+
+                                <!-- Packing Slip # (Handles multiples) -->
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(order.PackingSlipNumber))
+                                    {
+                                        <span class="text-muted fst-italic small">Pending Vendor Slip</span>
+                                    }
+                                    else
+                                    {
+                                        var slips = order.PackingSlipNumber.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                        if (slips.Length == 1)
+                                        {
+                                            <span class="badge bg-light text-dark border font-monospace">@slips[0]</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                <span class="badge bg-light text-dark border font-monospace">@slips[0]</span>
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="@string.Join(", ", slips)">
+                                                    +@(slips.Length - 1) more slips
+                                                </span>
+                                            </div>
+                                        }
+                                    }
+                                </td>
+
+                                <!-- Load Type (Valves, Pipe, Flanges, SNG, Supports, etc.) -->
+                                <td>
+                                    <span class="@loadTypeClass">@order.LoadType</span>
+                                </td>
+
+                                <!-- Expected Date & Relative Tag -->
+                                <td>
+                                    @if (order.ExpectedDate.HasValue)
+                                    {
+                                        <div class="d-flex align-items-center gap-1">
+                                            <span class="fw-semibold">@order.ExpectedDate.Value.ToString("MMM d, yyyy")</span>
+                                            <span class="@relBadgeClass">@relBadge</span>
+                                        </div>
+                                        <div class="text-muted" style="font-size: 11px;">@order.ExpectedDate.Value.ToString("dddd")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">Date TBD by SCM</span>
+                                    }
+                                </td>
+
+                                <!-- Has Landed in Yard? -->
+                                <td>
+                                    @if (order.HasLandedInYard)
+                                    {
+                                        <span class="badge-yard-landed" title="Landed in yard: @(order.ActualArrivalDate?.ToString("g") ?? "Time recorded")">
+                                            <i class="bi bi-geo-alt-fill"></i> Landed in Yard
+                                        </span>
+                                        @if (order.ActualArrivalDate.HasValue)
+                                        {
+                                            <div class="text-muted" style="font-size: 11px;">@order.ActualArrivalDate.Value.ToString("MMM d, h:mm tt")</div>
+                                        }
+                                    }
+                                    else if (order.ExpectedDate.HasValue && order.ExpectedDate.Value.Date < Model.YesterdayBusinessDay.Date)
+                                    {
+                                        <span class="badge-yard-overdue">
+                                            <i class="bi bi-exclamation-triangle-fill"></i> Overdue &bull; In Transit
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-yard-transit">
+                                            <i class="bi bi-truck"></i> In Transit
+                                        </span>
+                                    }
+                                </td>
+
+                                <!-- Receiving Status / Notes (OS&D, Backorder, etc.) -->
+                                <td>
+                                    @if (order.ReceivingStatus == "Pending Inspection")
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning-subtle">
+                                            <i class="bi bi-search"></i> Awaiting Inspection
+                                        </span>
+                                    }
+                                    else if (order.ReceivingStatus.Contains("Split") || order.ReceivingStatus.Contains("Partial"))
+                                    {
+                                        <span class="badge bg-info-subtle text-dark border border-info-subtle">
+                                            <i class="bi bi-pie-chart"></i> Partial / Split
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary border">
+                                            Not Yet Received
+                                        </span>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(order.Notes))
+                                    {
+                                        <div class="text-truncate text-muted small mt-1" style="max-width: 200px;" title="@order.Notes">
+                                            <i class="bi bi-sticky text-muted me-1"></i>@order.Notes
+                                        </div>
+                                    }
+                                </td>
+
+                                <!-- Actions -->
+                                <td style="text-align: right;">
+                                    <button class="btn btn-sm btn-light border py-1 px-2" type="button" 
+                                            onclick="event.stopPropagation(); openOrderDrawer('@order.Id', '@order.JobNumber', '@order.PoNumber', '@order.VendorName', '@order.PackingSlipNumber', '@order.LoadType', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@order.Notes')"
+                                            title="View Details">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- HubSpot-style Side Panel / Slide-out Drawer -->
+<div class="hs-drawer-backdrop" id="orderDrawerBackdrop" onclick="closeOrderDrawer()"></div>
+<div class="hs-drawer" id="orderDrawer">
+    <div class="p-3 border-bottom d-flex align-items-center justify-content-between bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary text-white" id="drawerJobPoBadge">Job / PO</span>
+            <h6 class="mb-0 fw-bold" id="drawerVendorTitle">Vendor Details</h6>
+        </div>
+        <button type="button" class="btn-close small" onclick="closeOrderDrawer()"></button>
+    </div>
+
+    <div class="p-4 flex-grow-1 overflow-auto">
+        <!-- Status summary callout -->
+        <div class="p-3 mb-3 rounded-2 bg-light border d-flex align-items-center justify-content-between" id="drawerStatusCallout">
+            <div>
+                <div class="text-muted small">Current Yard Status</div>
+                <div class="fw-bold fs-6" id="drawerYardStatusText">In Transit</div>
+            </div>
+            <div id="drawerStatusIcon">
+                <i class="bi bi-truck fs-3 text-primary"></i>
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted fw-bold small mb-3">Order &amp; SCM Information</h6>
+
+        <div class="row g-3 small mb-4">
+            <div class="col-6">
+                <label class="text-muted d-block">Job Number</label>
+                <span class="fw-bold fs-6" id="drawerJobNumber">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">PO Number</label>
+                <span class="fw-bold fs-6 font-monospace" id="drawerPoNumber">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Client</label>
+                <span class="fw-semibold" id="drawerClient">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Project Manager</label>
+                <span class="fw-semibold" id="drawerPm">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Vendor Name</label>
+                <span class="fw-semibold text-dark" id="drawerVendor">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Packing Slip(s)</label>
+                <div class="fw-semibold font-monospace" id="drawerPackingSlip">--</div>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Load Type</label>
+                <span class="badge bg-light text-dark border" id="drawerLoadType">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Expected Arrival Date</label>
+                <span class="fw-semibold" id="drawerExpectedDate">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Actual Arrival Date (Yard)</label>
+                <span class="fw-semibold" id="drawerActualArrival">Not landed yet</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Receiving / QC Stage</label>
+                <span class="badge bg-secondary-subtle text-secondary" id="drawerReceivingStatus">Not Received</span>
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted fw-bold small mb-2">Notes &amp; Receiving Instructions</h6>
+        <div class="p-3 bg-light rounded-2 border text-muted small" id="drawerNotes">
+            No special receiving notes recorded.
+        </div>
+
+        <div class="mt-4 pt-3 border-top">
+            <div class="alert alert-info py-2 small mb-0">
+                <i class="bi bi-info-circle me-1"></i> 
+                Once this shipment lands physically in the yard, it can be checked in to advance to physical receiving and inspection.
+            </div>
+        </div>
+    </div>
+
+    <div class="p-3 border-top bg-light d-flex align-items-center justify-content-between">
+        <button type="button" class="hs-btn-secondary" onclick="closeOrderDrawer()">Close</button>
+        <button type="button" class="hs-btn-primary" onclick="alert('Landed in Yard check-in will be linked to the Yard Check-In view in the next step!')">
+            <i class="bi bi-geo-alt me-1"></i> Check In to Yard
+        </button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function openOrderDrawer(id, job, po, vendor, packingSlip, loadType, expectedDate, hasLanded, actualArrival, recStatus, client, pm, notes) {
+        document.getElementById('drawerJobPoBadge').innerText = job + ' / ' + po;
+        document.getElementById('drawerVendorTitle').innerText = vendor;
+        document.getElementById('drawerJobNumber').innerText = job;
+        document.getElementById('drawerPoNumber').innerText = po;
+        document.getElementById('drawerVendor').innerText = vendor;
+        document.getElementById('drawerClient').innerText = client || 'Alstar Standard';
+        document.getElementById('drawerPm').innerText = pm || 'Assigned PM';
+        document.getElementById('drawerPackingSlip').innerText = packingSlip || 'Pending SCM Vendor Notice';
+        document.getElementById('drawerLoadType').innerText = loadType;
+        document.getElementById('drawerExpectedDate').innerText = expectedDate || 'Pending';
+        document.getElementById('drawerActualArrival').innerText = actualArrival || 'In Transit (Has not arrived)';
+        document.getElementById('drawerReceivingStatus').innerText = recStatus;
+        document.getElementById('drawerNotes').innerText = notes || 'No notes specified.';
+
+        var statusCallout = document.getElementById('drawerStatusCallout');
+        var yardStatusText = document.getElementById('drawerYardStatusText');
+        var statusIcon = document.getElementById('drawerStatusIcon');
+
+        if (hasLanded === 'True' || hasLanded === true) {
+            statusCallout.className = 'p-3 mb-3 rounded-2 bg-success-subtle border border-success-subtle d-flex align-items-center justify-content-between';
+            yardStatusText.innerText = 'Landed in Yard (Pending Receiving/QC)';
+            yardStatusText.className = 'fw-bold fs-6 text-success';
+            statusIcon.innerHTML = '<i class="bi bi-geo-alt-fill fs-3 text-success"></i>';
+        } else {
+            statusCallout.className = 'p-3 mb-3 rounded-2 bg-primary-subtle border border-primary-subtle d-flex align-items-center justify-content-between';
+            yardStatusText.innerText = 'In Transit / Expected';
+            yardStatusText.className = 'fw-bold fs-6 text-primary';
+            statusIcon.innerHTML = '<i class="bi bi-truck fs-3 text-primary"></i>';
+        }
+
+        document.getElementById('orderDrawerBackdrop').classList.add('active');
+        document.getElementById('orderDrawer').style.right = '0';
+    }
+
+    function closeOrderDrawer() {
+        document.getElementById('orderDrawerBackdrop').classList.remove('active');
+        document.getElementById('orderDrawer').style.right = '-540px';
+    }
+
+    function exportOrdersToCsv() {
+        var table = document.getElementById('orderingLogTable');
+        var rows = table.querySelectorAll('tr');
+        var csv = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = [], cols = rows[i].querySelectorAll('td, th');
+            for (var j = 0; j < cols.length - 1; j++) {
+                var text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim();
+                row.push('"' + text + '"');
+            }
+            if (row.length > 0) csv.push(row.join(','));
+        }
+        var csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+        var downloadLink = document.createElement('a');
+        downloadLink.download = 'Expected_Shipments_Ordering_Log.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }
+</script>
+}

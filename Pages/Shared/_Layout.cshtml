@@ -21,7 +21,10 @@
                     <span class="hs-brand-text">Materials<span class="text-coral">Alstar</span></span>
                 </a>
                 <nav class="hs-nav-links d-none d-md-flex align-items-center ms-3">
-                    <a asp-page="/Index" class="hs-nav-item active">Materials &amp; QC</a>
+                    <a asp-page="/Index" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")">Materials &amp; QC</a>
+                    <a asp-page="/OrderingLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/OrderingLog" ? "active" : "")">
+                        <i class="bi bi-clock-history me-1"></i> Ordering Log (Expected)
+                    </a>
                     <a href="#" class="hs-nav-item">Receiving Logs</a>
                     <a href="#" class="hs-nav-item">Heat Numbers (MTR)</a>
                     <a href="#" class="hs-nav-item">Warehouse Bins</a>

@@ -136,7 +136,22 @@ public static class DbInitializer
             }
         };
 
-        context.Materials.AddRange(materials);
-        context.SaveChanges();
+        if (!context.Materials.Any())
+        {
+            context.Materials.AddRange(materials);
+            context.SaveChanges();
+        }
+
+        if (!context.ExpectedOrders.Any())
+        {
+            var importService = new MaterialsAlstar.Services.ShipmentImportService();
+            var expectedOrders = importService.LoadExpectedOrders();
+            if (expectedOrders.Count > 0)
+            {
+                context.ExpectedOrders.AddRange(expectedOrders);
+                context.SaveChanges();
+            }
+        }
     }
 }
+

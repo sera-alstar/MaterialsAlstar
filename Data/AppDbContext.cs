@@ -10,4 +10,6 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<MaterialItem> Materials => Set<MaterialItem>();
+    public DbSet<ExpectedOrder> ExpectedOrders => Set<ExpectedOrder>();
 }
+
