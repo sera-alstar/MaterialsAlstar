@@ -77,6 +77,17 @@ public class ShipmentImportService
                     int actualIdx = headers.FindIndex(h => CleanHeader(h).Equals("Actual Arrival", StringComparison.OrdinalIgnoreCase));
                     int recIdIdx = headers.FindIndex(h => CleanHeader(h).Equals("Rec ID", StringComparison.OrdinalIgnoreCase));
                     int receiverIdx = headers.FindIndex(h => CleanHeader(h).Equals("Receiver", StringComparison.OrdinalIgnoreCase));
+                    int clientIdx = headers.FindIndex(h => CleanHeader(h).Contains("Client") && !CleanHeader(h).Contains("PO"));
+                    int pmIdx = headers.FindIndex(h => CleanHeader(h).Contains("Project Manager"));
+                    int unloaderIdx = headers.FindIndex(h => CleanHeader(h).Equals("Unloader", StringComparison.OrdinalIgnoreCase));
+                    int mrrIdx = headers.FindIndex(h => CleanHeader(h).Equals("MRR #", StringComparison.OrdinalIgnoreCase));
+                    int clientPoIdx = headers.FindIndex(h => CleanHeader(h).Equals("Client PO", StringComparison.OrdinalIgnoreCase));
+                    int freeIssueIdx = headers.FindIndex(h => CleanHeader(h).Equals("Free Issue", StringComparison.OrdinalIgnoreCase));
+                    int linkIdx = headers.FindIndex(h => CleanHeader(h).Equals("Link", StringComparison.OrdinalIgnoreCase));
+                    int matMtrCheckIdx = headers.FindIndex(h => CleanHeader(h).Equals("Materials MTR Check", StringComparison.OrdinalIgnoreCase));
+                    int matMtrCommIdx = headers.FindIndex(h => CleanHeader(h).Equals("Materials MTR Comments", StringComparison.OrdinalIgnoreCase));
+                    int qcMtrCheckIdx = headers.FindIndex(h => CleanHeader(h).Equals("QC MTR Check", StringComparison.OrdinalIgnoreCase));
+                    int qcMtrCommIdx = headers.FindIndex(h => CleanHeader(h).Equals("QC MTR Comments", StringComparison.OrdinalIgnoreCase));
 
                     while (recordsEnum.MoveNext())
                     {
@@ -93,6 +104,17 @@ public class ShipmentImportService
                         var actualStr = actualIdx >= 0 && cols.Count > actualIdx ? cols[actualIdx].Trim() : "";
                         var recId = recIdIdx >= 0 && cols.Count > recIdIdx ? cols[recIdIdx].Trim() : "";
                         var receiver = receiverIdx >= 0 && cols.Count > receiverIdx ? cols[receiverIdx].Trim() : "";
+                        var clientVal = clientIdx >= 0 && cols.Count > clientIdx ? cols[clientIdx].Trim() : "";
+                        var pmVal = pmIdx >= 0 && cols.Count > pmIdx ? cols[pmIdx].Trim() : "";
+                        var unloaderVal = unloaderIdx >= 0 && cols.Count > unloaderIdx ? cols[unloaderIdx].Trim() : "";
+                        var mrrVal = mrrIdx >= 0 && cols.Count > mrrIdx ? cols[mrrIdx].Trim() : "";
+                        var clientPoVal = clientPoIdx >= 0 && cols.Count > clientPoIdx ? cols[clientPoIdx].Trim() : "";
+                        var freeIssueVal = freeIssueIdx >= 0 && cols.Count > freeIssueIdx ? cols[freeIssueIdx].Trim() : "";
+                        var linkVal = linkIdx >= 0 && cols.Count > linkIdx ? cols[linkIdx].Trim() : "";
+                        var matMtrCheckVal = matMtrCheckIdx >= 0 && cols.Count > matMtrCheckIdx ? cols[matMtrCheckIdx].Trim() : "";
+                        var matMtrCommVal = matMtrCommIdx >= 0 && cols.Count > matMtrCommIdx ? cols[matMtrCommIdx].Trim() : "";
+                        var qcMtrCheckVal = qcMtrCheckIdx >= 0 && cols.Count > qcMtrCheckIdx ? cols[qcMtrCheckIdx].Trim() : "";
+                        var qcMtrCommVal = qcMtrCommIdx >= 0 && cols.Count > qcMtrCommIdx ? cols[qcMtrCommIdx].Trim() : "";
 
                         loadType = StandardizeLoadType(loadType, "", vendor);
                         if (IsStructuralSteel(loadType, vendor, "")) continue;
@@ -100,13 +122,30 @@ public class ShipmentImportService
                         var arrivalDate = ParseDate(actualStr);
                         if (!arrivalDate.HasValue) continue;
 
-                        // Focus on active/recent landed shipments for 2026
+                        // Focus on 2026 data
                         if (arrivalDate.Value.Year < 2026) continue;
 
-                        var client = "";
-                        if (clientLookup.TryGetValue(job, out var c)) client = c;
+                        var client = !string.IsNullOrEmpty(clientVal) ? clientVal : "";
+                        if (string.IsNullOrEmpty(client) && clientLookup.TryGetValue(job, out var c)) client = c;
 
                         var staging = AssignStagingLocation(loadType);
+
+                        // Package breakdown based on load type
+                        int pallets = 1;
+                        int crates = 0;
+                        int boxes = 0;
+                        if (loadType.Contains("SNG") || loadType.Contains("Bolt")) { pallets = 1; boxes = 4; }
+                        else if (loadType.Contains("Pipe")) { pallets = 1; crates = 0; boxes = 0; }
+                        else if (loadType.Contains("Valve")) { pallets = 1; crates = 1; boxes = 0; }
+                        else if (loadType.Contains("Flange") || loadType.Contains("Fitting")) { pallets = 2; boxes = 2; }
+                        else if (loadType.Contains("Support")) { pallets = 1; crates = 2; boxes = 0; }
+                        else if (loadType.Contains("Instrumentation") || loadType.Contains("Electrical")) { pallets = 0; crates = 1; boxes = 3; }
+
+                        // Realistic active status: September 20 to October 2026 are active in yard
+                        bool isRecent = arrivalDate.Value >= new DateTime(2026, 9, 20);
+                        string status = isRecent
+                            ? (!string.IsNullOrEmpty(receiver) ? "In Inspection" : "Landed - Pending Inspection")
+                            : "Complete";
 
                         entries.Add(new ReceivingLogEntry
                         {
@@ -117,18 +156,26 @@ public class ShipmentImportService
                             VendorName = vendor,
                             PackingSlipNumber = string.IsNullOrWhiteSpace(pl) ? $"PS-{po}" : pl,
                             BolNumber = $"BOL-{po}",
-                            PalletCount = loadType.Contains("SNG") ? 2 : 1,
-                            CrateCount = loadType.Contains("Valves") ? 1 : 0,
-                            BoxCount = loadType.Contains("Pipe") ? 0 : 2,
+                            PalletCount = pallets,
+                            CrateCount = crates,
+                            BoxCount = boxes,
                             LoadType = loadType,
                             StagingLocation = staging,
                             ArrivalDateTime = arrivalDate.Value,
-                            Status = arrivalDate.Value >= new DateTime(2026, 10, 1)
-                                ? (!string.IsNullOrEmpty(receiver) ? "In Inspection" : "Landed - Pending Inspection")
-                                : "Complete",
+                            Status = status,
                             IsAdminVerified = true,
                             ClientName = client,
+                            ProjectManager = pmVal,
                             ReceiverName = receiver,
+                            Unloader = unloaderVal,
+                            MrrNumber = mrrVal,
+                            ClientPo = clientPoVal,
+                            FreeIssue = freeIssueVal,
+                            DocumentLink = linkVal,
+                            MaterialsMtrCheck = matMtrCheckVal,
+                            MaterialsMtrComments = matMtrCommVal,
+                            QcMtrCheck = qcMtrCheckVal,
+                            QcMtrComments = qcMtrCommVal,
                             RecId = recId
                         });
                     }
@@ -137,7 +184,7 @@ public class ShipmentImportService
             catch { }
         }
 
-        // Add 2 pending admin verification sample entries for client-supplied shipments without known job#
+        // Add 3 pending admin verification test entries for client-supplied / unscheduled arrivals
         entries.Add(new ReceivingLogEntry
         {
             Id = idCounter++,
@@ -151,11 +198,11 @@ public class ShipmentImportService
             CrateCount = 1,
             BoxCount = 0,
             LoadType = "Instrumentation",
-            StagingLocation = "Walkway",
+            StagingLocation = "Quarantine / Inspection Pad",
             ArrivalDateTime = new DateTime(2026, 10, 5, 14, 30, 0),
             Status = "Pending Admin Verification",
             IsAdminVerified = false,
-            Notes = "Client-supplied instrumentation. Truck driver had no job# on BOL. Staged on Walkway for inspection."
+            Notes = "Client-supplied Fisher control valves. Truck driver had no job# on BOL. Staged on Quarantine pad for inspection."
         });
 
         entries.Add(new ReceivingLogEntry
@@ -175,7 +222,27 @@ public class ShipmentImportService
             ArrivalDateTime = new DateTime(2026, 10, 5, 15, 10, 0),
             Status = "Pending Admin Verification",
             IsAdminVerified = false,
-            Notes = "Urgent bolt-up shipment arrived directly from courier. Needs Job# assignment."
+            Notes = "Urgent B7 stud bolts arrived directly from courier. Needs Job# assignment from PC."
+        });
+
+        entries.Add(new ReceivingLogEntry
+        {
+            Id = idCounter++,
+            JpKey = "UNKNOWN-0312",
+            JobNumber = null,
+            PoNumber = "0312",
+            VendorName = "Swagelok Central & Northern AB",
+            PackingSlipNumber = "SW-55102",
+            BolNumber = "BOL-SW-1109",
+            PalletCount = 1,
+            CrateCount = 0,
+            BoxCount = 3,
+            LoadType = "Valves",
+            StagingLocation = "Bay 1 - Receiving Floor",
+            ArrivalDateTime = new DateTime(2026, 10, 6, 8, 15, 0),
+            Status = "Pending Admin Verification",
+            IsAdminVerified = false,
+            Notes = "60-series ball valves and tubing fittings delivered this morning. Awaiting PO confirmation from SCM."
         });
 
         return entries;

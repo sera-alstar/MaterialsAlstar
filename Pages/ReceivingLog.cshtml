@@ -137,7 +137,16 @@
                                 </td>
                                 <td style="text-align: right;">
                                     <button type="button" class="btn btn-sm btn-warning text-dark fw-bold"
-                                            onclick="openAdminVerifyModal(@p.Id, '@p.PoNumber', '@Html.Raw(p.VendorName)', '@(p.JobNumber ?? "")', '@p.PackingSlipNumber', '@p.BolNumber', '@p.LoadType', '@p.StagingLocation', '@Html.Raw(p.Notes ?? "")')">
+                                            data-id="@p.Id"
+                                            data-po="@p.PoNumber"
+                                            data-vendor="@p.VendorName"
+                                            data-job="@(p.JobNumber ?? "")"
+                                            data-slip="@p.PackingSlipNumber"
+                                            data-bol="@p.BolNumber"
+                                            data-loadtype="@p.LoadType"
+                                            data-staging="@p.StagingLocation"
+                                            data-notes="@(p.Notes ?? "")"
+                                            onclick="openAdminVerifyModalFromBtn(this)">
                                         <i class="bi bi-pencil-square me-1"></i> Review &amp; Verify
                                     </button>
                                 </td>
@@ -366,7 +375,32 @@
                         <tbody>
                             @foreach (var item in group.Items)
                             {
-                                <tr onclick="openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
+                                <tr class="rec-log-row"
+                                    data-id="@item.Id"
+                                    data-jpkey="@item.JpKey"
+                                    data-job="@(item.JobNumber ?? "Client Supplied")"
+                                    data-po="@item.PoNumber"
+                                    data-vendor="@item.VendorName"
+                                    data-slip="@item.PackingSlipNumber"
+                                    data-bol="@item.BolNumber"
+                                    data-packages="@item.PackageSummary"
+                                    data-loadtype="@item.LoadType"
+                                    data-staging="@item.StagingLocation"
+                                    data-arrival="@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")"
+                                    data-status="@item.Status"
+                                    data-receiver="@(item.ReceiverName ?? "Unassigned")"
+                                    data-unloader="@(item.Unloader ?? "--")"
+                                    data-mrr="@(item.MrrNumber ?? "--")"
+                                    data-recid="@(item.RecId ?? "--")"
+                                    data-matmtr="@(item.MaterialsMtrCheck ?? "--")"
+                                    data-matmtrcomm="@(item.MaterialsMtrComments ?? "")"
+                                    data-qcmtr="@(item.QcMtrCheck ?? "--")"
+                                    data-qcmtrcomm="@(item.QcMtrComments ?? "")"
+                                    data-doclink="@(item.DocumentLink ?? "")"
+                                    data-notes="@(item.Notes ?? "")"
+                                    data-photo="@(item.PhotoPath ?? "")"
+                                    onclick="openReceivingDrawerFromRow(this)"
+                                    style="cursor: pointer;">
                                     <!-- JP Key -->
                                     <td>
                                         <span class="badge bg-dark font-monospace fw-bold fs-6">@item.JpKey</span>
@@ -566,6 +600,43 @@
             </div>
         </div>
 
+        <!-- MML & QC Details from RecLog -->
+        <h6 class="text-uppercase text-muted fw-bold small mb-2">MML &amp; Quality Control Particulars</h6>
+        <div class="row g-3 small mb-4">
+            <div class="col-6">
+                <label class="text-muted d-block">MRR Number</label>
+                <span class="fw-semibold text-dark" id="recDrawerMrr">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Rec ID</label>
+                <span class="badge bg-light text-dark border font-monospace" id="recDrawerRecId">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Assigned Receiver</label>
+                <span class="fw-semibold text-dark" id="recDrawerReceiver">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Yard Unloader</label>
+                <span class="fw-semibold text-dark" id="recDrawerUnloader">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Materials MTR Check</label>
+                <span class="fw-semibold text-dark" id="recDrawerMatMtr">--</span>
+                <div class="text-muted small" id="recDrawerMatMtrComm"></div>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">QC MTR Check</label>
+                <span class="fw-semibold text-dark" id="recDrawerQcMtr">--</span>
+                <div class="text-muted small" id="recDrawerQcMtrComm"></div>
+            </div>
+            <div class="col-12" id="recDrawerDocLinkSection">
+                <label class="text-muted d-block">Document / MRR Link</label>
+                <a id="recDrawerDocLink" href="#" target="_blank" class="text-primary text-break small">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Open Receiving Documents
+                </a>
+            </div>
+        </div>
+
         <!-- Notes -->
         <h6 class="text-uppercase text-muted fw-bold small mb-2">Staging &amp; Driver Notes</h6>
         <div class="p-3 bg-light rounded-2 border text-muted small mb-4" id="recDrawerNotes">
@@ -691,25 +762,44 @@
 
 @section Scripts {
 <script>
-    function openReceivingDrawer(id, jpKey, job, po, vendor, packingSlip, bol, packages, loadType, staging, arrival, status, receiver, notes, photo) {
-        document.getElementById('recDrawerEntryId').value = id;
-        document.getElementById('recDrawerJpKey').innerText = jpKey;
-        document.getElementById('recDrawerVendor').innerText = vendor;
-        document.getElementById('recDrawerStaging').innerText = staging;
-        document.getElementById('recDrawerJob').innerText = job;
-        document.getElementById('recDrawerPo').innerText = po;
-        document.getElementById('recDrawerSlip').innerText = packingSlip;
-        document.getElementById('recDrawerBol').innerText = bol;
-        document.getElementById('recDrawerLoadType').innerText = loadType;
-        document.getElementById('recDrawerPackages').innerText = packages;
-        document.getElementById('recDrawerArrival').innerText = arrival;
-        document.getElementById('recDrawerStatus').innerText = status;
-        document.getElementById('recDrawerNotes').innerText = notes || 'No notes specified.';
+    function openReceivingDrawerFromRow(row) {
+        var d = row.dataset;
+        document.getElementById('recDrawerEntryId').value = d.id;
+        document.getElementById('recDrawerJpKey').innerText = d.jpkey;
+        document.getElementById('recDrawerVendor').innerText = d.vendor;
+        document.getElementById('recDrawerStaging').innerText = d.staging;
+        document.getElementById('recDrawerJob').innerText = d.job;
+        document.getElementById('recDrawerPo').innerText = d.po;
+        document.getElementById('recDrawerSlip').innerText = d.slip;
+        document.getElementById('recDrawerBol').innerText = d.bol;
+        document.getElementById('recDrawerLoadType').innerText = d.loadtype;
+        document.getElementById('recDrawerPackages').innerText = d.packages;
+        document.getElementById('recDrawerArrival').innerText = d.arrival;
+        document.getElementById('recDrawerStatus').innerText = d.status;
+        document.getElementById('recDrawerNotes').innerText = d.notes || 'No notes specified.';
+
+        // RecLog & QC Details
+        document.getElementById('recDrawerMrr').innerText = d.mrr || '--';
+        document.getElementById('recDrawerRecId').innerText = d.recid || '--';
+        document.getElementById('recDrawerReceiver').innerText = d.receiver || 'Unassigned';
+        document.getElementById('recDrawerUnloader').innerText = d.unloader || 'Yard Crew';
+        document.getElementById('recDrawerMatMtr').innerText = d.matmtr || '--';
+        document.getElementById('recDrawerMatMtrComm').innerText = d.matmtrcomm || '';
+        document.getElementById('recDrawerQcMtr').innerText = d.qcmtr || '--';
+        document.getElementById('recDrawerQcMtrComm').innerText = d.qcmtrcomm || '';
+
+        var docLinkSection = document.getElementById('recDrawerDocLinkSection');
+        if (d.doclink && d.doclink.trim() !== '') {
+            document.getElementById('recDrawerDocLink').href = d.doclink;
+            docLinkSection.classList.remove('d-none');
+        } else {
+            docLinkSection.classList.add('d-none');
+        }
 
         var photoSection = document.getElementById('recDrawerPhotoSection');
-        if (photo && photo.trim() !== '') {
-            document.getElementById('recDrawerPhotoImg').src = photo;
-            document.getElementById('recDrawerPhotoLink').href = photo;
+        if (d.photo && d.photo.trim() !== '') {
+            document.getElementById('recDrawerPhotoImg').src = d.photo;
+            document.getElementById('recDrawerPhotoLink').href = d.photo;
             photoSection.classList.remove('d-none');
         } else {
             photoSection.classList.add('d-none');
@@ -724,14 +814,15 @@
         document.getElementById('recDrawer').style.right = '-540px';
     }
 
-    function openAdminVerifyModal(id, po, vendor, job, slip, bol, loadType, staging, notes) {
-        document.getElementById('verifyEntryId').value = id;
-        document.getElementById('verifyPo').innerText = po;
-        document.getElementById('verifyVendor').innerText = vendor;
-        document.getElementById('verifySlipBol').innerText = slip + ' / ' + bol;
-        document.getElementById('verifyJobInput').value = job || '';
-        document.getElementById('verifyLoadTypeInput').value = loadType || 'General Materials';
-        document.getElementById('verifyStagingInput').value = staging || 'Walkway';
+    function openAdminVerifyModalFromBtn(btn) {
+        var d = btn.dataset;
+        document.getElementById('verifyEntryId').value = d.id;
+        document.getElementById('verifyPo').innerText = d.po;
+        document.getElementById('verifyVendor').innerText = d.vendor;
+        document.getElementById('verifySlipBol').innerText = d.slip + ' / ' + d.bol;
+        document.getElementById('verifyJobInput').value = d.job || '';
+        document.getElementById('verifyLoadTypeInput').value = d.loadtype || 'General Materials';
+        document.getElementById('verifyStagingInput').value = d.staging || 'Walkway';
 
         var modal = new bootstrap.Modal(document.getElementById('adminVerifyModal'));
         modal.show();

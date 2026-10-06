@@ -26,6 +26,15 @@ public class ReceivingLogEntry
     public string? ProjectManager { get; set; }
     public string? Notes { get; set; }
     public string? ReceiverName { get; set; }
+    public string? Unloader { get; set; }
+    public string? MrrNumber { get; set; } // Material Receiving Report #
+    public string? ClientPo { get; set; }
+    public string? FreeIssue { get; set; } // Y / N
+    public string? MaterialsMtrCheck { get; set; } // Complete, N/A, Pending
+    public string? MaterialsMtrComments { get; set; }
+    public string? QcMtrCheck { get; set; } // Complete, N/A, Pending
+    public string? QcMtrComments { get; set; }
+    public string? DocumentLink { get; set; } // Link to Drive folder / documents
     public DateTime? ReceivingCompletedAt { get; set; }
-    public string? RecId { get; set; } // e.g. from RecLog2
+    public string? RecId { get; set; } // e.g. REC-0001
 }

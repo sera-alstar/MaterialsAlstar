@@ -8,11 +8,6 @@ public static class DbInitializer
     {
         context.Database.EnsureCreated();
 
-        if (context.Materials.Any())
-        {
-            return; // Database already seeded
-        }
-
         var materials = new MaterialItem[]
         {
             new()
