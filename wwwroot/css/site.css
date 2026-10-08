@@ -382,6 +382,26 @@ body.hubspot-body {
   border-bottom: 1px solid var(--hs-border-light);
   white-space: nowrap;
 }
+.hs-table thead th.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.hs-table thead th.sortable-col:hover {
+  background-color: #eaf0f6;
+  color: var(--hs-coral);
+}
+.hs-table thead th.sortable-col:hover .sort-icon {
+  opacity: 1 !important;
+  color: var(--hs-coral) !important;
+}
+.hs-table thead th.sortable-col.sorted-active {
+  background-color: #e1ebf5;
+  color: var(--hs-navy-dark);
+}
+.hs-table thead th.sortable-col.sorted-active .sort-icon {
+  color: var(--hs-coral) !important;
+}
 .hs-table tbody td {
   padding: 12px 16px;
   vertical-align: middle;

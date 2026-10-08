@@ -340,6 +340,10 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small" id="toolbarSortNotice">
+                Order: <strong class="text-dark">Landed &rarr; Expected Date &rarr; Job &rarr; PO</strong>
+            </span>
+            <span class="text-secondary small">|</span>
             <span class="text-muted small">Showing @Model.Orders.Count shipments</span>
         </div>
     </form>
@@ -352,14 +356,54 @@
             <table class="hs-table align-middle" id="orderingLogTable">
                 <thead>
                     <tr>
-                        <th style="width: 130px;">JP Key / Job</th>
-                        <th style="width: 95px;">PO #</th>
-                        <th>Vendor</th>
-                        <th>Packing Slip #</th>
-                        <th>Load Type</th>
-                        <th style="width: 140px;">Expected Date</th>
-                        <th style="width: 155px;">Yard Status</th>
-                        <th>Receiving Status / Notes</th>
+                        <th style="width: 130px;" class="sortable-col" data-sort-key="jpkey" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>JP Key / Job</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 95px;" class="sortable-col" data-sort-key="po" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>PO #</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="vendor" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Vendor</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="slip" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Packing Slip #</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="loadtype" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Load Type</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 140px;" class="sortable-col" data-sort-key="expected" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Expected Date</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 155px;" class="sortable-col" data-sort-key="yardstatus" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Yard Status</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="recstatus" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Receiving Status</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
                         <th style="width: 160px; text-align: right;">Yard Action</th>
                     </tr>
                 </thead>
@@ -387,7 +431,22 @@
                             var relBadgeClass = GetRelativeClass(relBadge);
                             var loadTypeClass = Model.GetLoadTypeBadgeClass(order.LoadType);
 
-                            <tr onclick="openOrderDrawer('@order.Id', '@order.JpKey', '@order.JobNumber', '@order.PoNumber', '@Html.Raw(order.VendorName)', '@Html.Raw(order.PackingSlipNumber)', '@Html.Raw(order.LoadType)', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@Html.Raw(order.Notes)')">
+                            <tr class="order-log-row"
+                                data-id="@order.Id"
+                                data-jpkey="@order.JpKey"
+                                data-job="@order.JobNumber"
+                                data-po="@order.PoNumber"
+                                data-vendor="@order.VendorName"
+                                data-slip="@(order.PackingSlipNumber ?? "")"
+                                data-loadtype="@order.LoadType"
+                                data-expected="@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")"
+                                data-expected-ts="@(order.ExpectedDate.HasValue ? order.ExpectedDate.Value.Ticks : 0)"
+                                data-yardstatus="@(order.HasLandedInYard ? "Landed in Yard" : (order.ExpectedDate.HasValue && order.ExpectedDate.Value.Date < Model.YesterdayBusinessDay.Date ? "Overdue In Transit" : "In Transit"))"
+                                data-recstatus="@order.ReceivingStatus"
+                                data-client="@(order.ClientName ?? "")"
+                                data-pm="@(order.ProjectManager ?? "")"
+                                data-notes="@(order.Notes ?? "")"
+                                onclick="openOrderDrawer('@order.Id', '@order.JpKey', '@order.JobNumber', '@order.PoNumber', '@Html.Raw(order.VendorName)', '@Html.Raw(order.PackingSlipNumber)', '@Html.Raw(order.LoadType)', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@Html.Raw(order.Notes)')">
                                 <!-- JP Key & Job # with client -->
                                 <td>
                                     <span class="badge bg-dark-subtle text-dark border font-monospace fw-bold" style="font-size: 11px;">@order.JpKey</span>
@@ -1093,5 +1152,158 @@
         downloadLink.click();
         document.body.removeChild(downloadLink);
     }
+
+    // -------------------------------------------------------------
+    // Client-Side Column Sorting for Ordering Log
+    // Supports 3-state toggle: Unsorted -> Ascending -> Descending -> Unsorted
+    // Columns: JP Key/Job, PO#, Vendor, Packing Slip#, Load Type, Expected Date, Yard Status, Receiving Status
+    // -------------------------------------------------------------
+    function initTableSorting() {
+        var currentSortKey = null;
+        var currentSortDir = 'none'; // 'none' | 'asc' | 'desc'
+
+        var sortLabels = {
+            'jpkey': 'JP Key / Job',
+            'po': 'PO #',
+            'vendor': 'Vendor',
+            'slip': 'Packing Slip #',
+            'loadtype': 'Load Type',
+            'expected': 'Expected Date',
+            'yardstatus': 'Yard Status',
+            'recstatus': 'Receiving Status'
+        };
+
+        var table = document.getElementById('orderingLogTable');
+        if (!table) return;
+
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        // Cache original order indices on all rows
+        var rows = tbody.querySelectorAll('tr.order-log-row');
+        rows.forEach(function(row, idx) {
+            row.dataset.originalIndex = idx;
+        });
+
+        function compareRows(a, b, key, dir) {
+            if (dir === 'none' || !key) {
+                var idxA = parseInt(a.dataset.originalIndex, 10) || 0;
+                var idxB = parseInt(b.dataset.originalIndex, 10) || 0;
+                return idxA - idxB;
+            }
+
+            if (key === 'expected') {
+                var tsA = parseInt(a.dataset.expectedTs, 10) || 0;
+                var tsB = parseInt(b.dataset.expectedTs, 10) || 0;
+                if (tsA === 0 && tsB === 0) return 0;
+                if (tsA === 0) return 1;
+                if (tsB === 0) return -1;
+                return dir === 'asc' ? (tsA - tsB) : (tsB - tsA);
+            }
+
+            var valA = (a.dataset[key] || '').trim();
+            var valB = (b.dataset[key] || '').trim();
+
+            // Natural alphanumeric / numerical comparison (e.g. PO numbers, vendors, slip, etc.)
+            var cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+            return dir === 'asc' ? cmp : -cmp;
+        }
+
+        function updateSortUI() {
+            var headers = table.querySelectorAll('th.sortable-col');
+            headers.forEach(function(th) {
+                var key = th.dataset.sortKey;
+                var icon = th.querySelector('.sort-icon');
+                var label = sortLabels[key] || key;
+
+                if (key === currentSortKey && currentSortDir !== 'none') {
+                    th.classList.add('sorted-active');
+                    if (currentSortDir === 'asc') {
+                        if (icon) {
+                            icon.className = 'bi bi-arrow-up sort-icon text-primary fw-bold ms-1';
+                            icon.style.opacity = '1';
+                        }
+                        th.title = label + ': Sorted ascending (A-Z, 0-9). Click to sort descending.';
+                    } else {
+                        if (icon) {
+                            icon.className = 'bi bi-arrow-down sort-icon text-primary fw-bold ms-1';
+                            icon.style.opacity = '1';
+                        }
+                        th.title = label + ': Sorted descending (Z-A, 9-0). Click to return to unsorted.';
+                    }
+                } else {
+                    th.classList.remove('sorted-active');
+                    if (icon) {
+                        icon.className = 'bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1';
+                        icon.style.opacity = '';
+                    }
+                    th.title = 'Click to sort by ' + label + ': Unsorted \u2192 Ascending \u2192 Descending';
+                }
+            });
+
+            // Update toolbar sort indicator
+            var toolbarNotice = document.getElementById('toolbarSortNotice');
+            if (toolbarNotice) {
+                if (currentSortKey && currentSortDir !== 'none') {
+                    var dirText = currentSortDir === 'asc' ? 'Ascending (A &rarr; Z, 0 &rarr; 9)' : 'Descending (Z &rarr; A, 9 &rarr; 0)';
+                    var dirIcon = currentSortDir === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt';
+                    toolbarNotice.innerHTML = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi ' + dirIcon + ' me-1"></i>Sorted by: <strong>' + (sortLabels[currentSortKey] || currentSortKey) + '</strong> (' + dirText + ')</span> ' +
+                        '<button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-1" onclick="window.resetTableSorting()"><i class="bi bi-x-circle me-1"></i>Reset to default order</button>';
+                } else {
+                    toolbarNotice.innerHTML = 'Order: <strong class="text-dark">Landed &rarr; Expected Date &rarr; Job &rarr; PO</strong>';
+                }
+            }
+        }
+
+        function applySorting() {
+            var currentRows = Array.from(tbody.querySelectorAll('tr.order-log-row'));
+            if (currentRows.length <= 1) return;
+
+            currentRows.sort(function(a, b) {
+                return compareRows(a, b, currentSortKey, currentSortDir);
+            });
+
+            var fragment = document.createDocumentFragment();
+            currentRows.forEach(function(row) {
+                fragment.appendChild(row);
+            });
+            tbody.appendChild(fragment);
+
+            updateSortUI();
+        }
+
+        table.querySelectorAll('th.sortable-col').forEach(function(th) {
+            th.addEventListener('click', function(e) {
+                var key = th.dataset.sortKey;
+                if (!key) return;
+
+                if (currentSortKey !== key) {
+                    currentSortKey = key;
+                    currentSortDir = 'asc';
+                } else {
+                    if (currentSortDir === 'asc') {
+                        currentSortDir = 'desc';
+                    } else if (currentSortDir === 'desc') {
+                        currentSortDir = 'none';
+                        currentSortKey = null;
+                    } else {
+                        currentSortDir = 'asc';
+                    }
+                }
+
+                applySorting();
+            });
+        });
+
+        window.resetTableSorting = function() {
+            currentSortKey = null;
+            currentSortDir = 'none';
+            applySorting();
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initTableSorting();
+    });
 </script>
 }
