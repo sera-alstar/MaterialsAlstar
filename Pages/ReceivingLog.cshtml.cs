@@ -50,6 +50,13 @@ public class ReceivingLogModel : PageModel
     // Filter Options
     public List<string> StagingLocationOptions { get; set; } = new();
     public List<string> LoadTypeOptions { get; set; } = new();
+    public List<JobLookupOption> AvailableJobs { get; set; } = new();
+
+    public class JobLookupOption
+    {
+        public string JobNumber { get; set; } = string.Empty;
+        public string? ClientName { get; set; }
+    }
 
     public class ReceivingGroupViewModel
     {
@@ -109,6 +116,22 @@ public class ReceivingLogModel : PageModel
             .Where(t => !string.IsNullOrEmpty(t))
             .Distinct()
             .OrderBy(t => t)
+            .ToList();
+
+        // Distinct jobs from Receiving Log entries for Admin Verification & Approval Modal
+        var rawJobs = await _context.ReceivingLogs
+            .Where(r => !string.IsNullOrWhiteSpace(r.JobNumber))
+            .Select(r => new { Job = r.JobNumber!.Trim(), r.ClientName })
+            .ToListAsync();
+
+        AvailableJobs = rawJobs
+            .GroupBy(r => r.Job, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new JobLookupOption
+            {
+                JobNumber = g.Key,
+                ClientName = g.Select(x => x.ClientName).FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))
+            })
+            .OrderBy(j => j.JobNumber)
             .ToList();
 
         // 3. Search & Filters

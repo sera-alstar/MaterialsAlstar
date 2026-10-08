@@ -701,15 +701,53 @@
                     </div>
 
                     <div class="row g-3">
-                        <!-- Job # Assignment (Key requirement for client supplied) -->
+                        <!-- Job # Assignment (Searchable Dropdown populated from Receiving Log entries) -->
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">
-                                Assign Job # <span class="text-danger">*</span>
+                            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+                                <span>Assign Job # <span class="text-danger">*</span></span>
+                                <span class="text-muted fw-normal" style="font-size: 11px;">@Model.AvailableJobs.Count jobs in Receiving Log</span>
                             </label>
-                            <input type="text" name="jobNumber" id="verifyJobInput" class="form-control font-monospace" required
-                                   placeholder="e.g. 251078C" />
+                            <div class="position-relative" id="jobSearchDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-briefcase"></i></span>
+                                    <input type="text" name="jobNumber" id="verifyJobInput" class="form-control font-monospace" required
+                                           placeholder="Search or select Job #..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="jobDropdownToggleBtn" title="Toggle job list" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="jobDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Searchable Dropdown Menu -->
+                                <div id="jobDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 240px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Receiving Log Jobs</span>
+                                        <span id="jobMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.AvailableJobs.Count</span>
+                                    </div>
+                                    <div id="jobOptionsList">
+                                        @foreach (var job in Model.AvailableJobs)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light job-option-item"
+                                                    data-job="@job.JobNumber"
+                                                    data-client="@(job.ClientName ?? "")">
+                                                <div>
+                                                    <span class="fw-bold font-monospace text-dark job-number-text">@job.JobNumber</span>
+                                                    @if (!string.IsNullOrEmpty(job.ClientName))
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-dark border ms-2 small job-client-text">@job.ClientName</span>
+                                                    }
+                                                </div>
+                                                <i class="bi bi-check-lg text-primary d-none job-selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="jobNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching jobs found in Receiving Log.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can still keep the typed value to assign a new job.</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-text small">
-                                Assign Job # to generate standard JP Key (e.g. 251078C0091).
+                                Select from existing Receiving Log jobs or enter a new Job # to generate standard JP Key.
                             </div>
                         </div>
 
@@ -824,9 +862,187 @@
         document.getElementById('verifyLoadTypeInput').value = d.loadtype || 'General Materials';
         document.getElementById('verifyStagingInput').value = d.staging || 'Walkway';
 
+        if (window.resetJobSearchableDropdown) {
+            window.resetJobSearchableDropdown(d.job || '');
+        }
+
         var modal = new bootstrap.Modal(document.getElementById('adminVerifyModal'));
         modal.show();
     }
+
+    // Searchable Dropdown for Jobs in Admin Verification Modal
+    function initJobSearchableDropdown() {
+        var input = document.getElementById('verifyJobInput');
+        var toggleBtn = document.getElementById('jobDropdownToggleBtn');
+        var menu = document.getElementById('jobDropdownMenu');
+        var optionsList = document.getElementById('jobOptionsList');
+        var noMatch = document.getElementById('jobNoMatch');
+        var matchCount = document.getElementById('jobMatchCount');
+        var icon = document.getElementById('jobDropdownIcon');
+        var modalEl = document.getElementById('adminVerifyModal');
+
+        if (!input || !menu || !optionsList) return;
+
+        function openDropdown() {
+            menu.style.display = 'block';
+            if (icon) {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-up');
+            }
+            filterOptions(input.value);
+        }
+
+        function closeDropdown() {
+            menu.style.display = 'none';
+            if (icon) {
+                icon.classList.remove('bi-chevron-up');
+                icon.classList.add('bi-chevron-down');
+            }
+            var items = optionsList.querySelectorAll('.job-option-item');
+            items.forEach(function(el) { el.classList.remove('active'); });
+        }
+
+        function filterOptions(query) {
+            var q = (query || '').toLowerCase().trim();
+            var items = optionsList.querySelectorAll('.job-option-item');
+            var visibleCount = 0;
+
+            items.forEach(function(item) {
+                var job = (item.dataset.job || '').toLowerCase();
+                var client = (item.dataset.client || '').toLowerCase();
+                var isMatch = !q || job.includes(q) || client.includes(q);
+
+                if (isMatch) {
+                    item.classList.remove('d-none');
+                    visibleCount++;
+                } else {
+                    item.classList.add('d-none');
+                }
+
+                // Show selected checkmark icon if exact match
+                var checkIcon = item.querySelector('.job-selected-icon');
+                if (checkIcon) {
+                    if (q && job === q) {
+                        checkIcon.classList.remove('d-none');
+                    } else {
+                        checkIcon.classList.add('d-none');
+                    }
+                }
+            });
+
+            if (matchCount) matchCount.innerText = visibleCount;
+            if (noMatch) {
+                if (visibleCount === 0) {
+                    noMatch.classList.remove('d-none');
+                } else {
+                    noMatch.classList.add('d-none');
+                }
+            }
+        }
+
+        function selectJob(jobVal) {
+            input.value = jobVal;
+            closeDropdown();
+            input.dispatchEvent(new Event('change'));
+        }
+
+        input.addEventListener('focus', function() {
+            openDropdown();
+        });
+
+        input.addEventListener('click', function() {
+            openDropdown();
+        });
+
+        input.addEventListener('input', function() {
+            if (menu.style.display !== 'block') {
+                openDropdown();
+            } else {
+                filterOptions(input.value);
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            var visibleItems = Array.from(optionsList.querySelectorAll('.job-option-item:not(.d-none)'));
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (menu.style.display !== 'block') {
+                    openDropdown();
+                    return;
+                }
+                if (visibleItems.length === 0) return;
+                var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                var nextIndex = activeIndex < visibleItems.length - 1 ? activeIndex + 1 : 0;
+                visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                visibleItems[nextIndex].classList.add('active');
+                visibleItems[nextIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (menu.style.display !== 'block') {
+                    openDropdown();
+                    return;
+                }
+                if (visibleItems.length === 0) return;
+                var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                var prevIndex = activeIndex > 0 ? activeIndex - 1 : visibleItems.length - 1;
+                visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                visibleItems[prevIndex].classList.add('active');
+                visibleItems[prevIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                if (menu.style.display === 'block') {
+                    var highlighted = visibleItems.find(function(it) { return it.classList.contains('active'); });
+                    if (highlighted) {
+                        e.preventDefault();
+                        selectJob(highlighted.dataset.job);
+                    }
+                }
+            } else if (e.key === 'Escape') {
+                closeDropdown();
+            }
+        });
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (menu.style.display === 'block') {
+                    closeDropdown();
+                } else {
+                    openDropdown();
+                    input.focus();
+                }
+            });
+        }
+
+        optionsList.addEventListener('click', function(e) {
+            var item = e.target.closest('.job-option-item');
+            if (item) {
+                e.preventDefault();
+                selectJob(item.dataset.job);
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!menu.contains(e.target) && !input.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+                closeDropdown();
+            }
+        });
+
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function() {
+                closeDropdown();
+            });
+        }
+
+        window.resetJobSearchableDropdown = function(initialJob) {
+            closeDropdown();
+            filterOptions(initialJob || '');
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initJobSearchableDropdown();
+    });
 
     function exportReceivingLogToCsv() {
         var tables = document.querySelectorAll('.hs-table');
