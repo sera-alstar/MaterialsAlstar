@@ -1,8 +1,10 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MaterialsAlstar.Data;
 using MaterialsAlstar.Models;
+using MaterialsAlstar.Services;
 
 namespace MaterialsAlstar.Pages;
 
@@ -32,17 +34,19 @@ public class ReceivingLogModel : PageModel
     public string? LoadTypeFilter { get; set; }
 
     [BindProperty(SupportsGet = true)]
-    public string? StatusFilter { get; set; } = "active"; // "active" (landed/inspecting), "all", "completed"
+    public string? StatusFilter { get; set; } = "active"; // "active" (landed/inspecting/pending approval), "all", "completed"
 
     // KPIs & Metrics
     public int TotalLandedCount { get; set; }
     public int TotalAdminPendingCount { get; set; }
+    public int TotalAdminInspectionCount { get; set; }
     public int TotalInInspectionCount { get; set; }
     public int TotalPalletsCount { get; set; }
     public int TotalBoxesCount { get; set; }
 
-    // Admin Verification Queue
+    // Admin Verification Queues
     public List<ReceivingLogEntry> AdminPendingShipments { get; set; } = new();
+    public List<ReceivingLogEntry> AdminInspectionApprovalQueue { get; set; } = new();
 
     // Grouped Entries
     public List<ReceivingGroupViewModel> Groups { get; set; } = new();
@@ -56,6 +60,45 @@ public class ReceivingLogModel : PageModel
     {
         public string JobNumber { get; set; } = string.Empty;
         public string? ClientName { get; set; }
+    }
+
+    public class InspectionLineDto
+    {
+        public int Id { get; set; }
+        public int ReceivingLogEntryId { get; set; }
+        public string? JpKey { get; set; }
+        public string? PoNumber { get; set; }
+        public string? PoLineNumber { get; set; }
+        public string BomId { get; set; } = string.Empty;
+        public string ItemDescription { get; set; } = string.Empty;
+        public decimal QuantityOrdered { get; set; }
+        public decimal QuantityPreviouslyReceived { get; set; }
+        public decimal QuantityDue { get; set; }
+        public decimal QuantityReceivedThisShipment { get; set; }
+        public string UnitOfMeasure { get; set; } = "EA";
+        public bool IsFullyReceived => QuantityPreviouslyReceived >= QuantityOrdered && QuantityOrdered > 0;
+        public bool IsDescriptionMatched { get; set; }
+        public string? HeatNumber { get; set; }
+        public string? SerialNumber { get; set; }
+        public string? StorageLocation { get; set; }
+        public string? Notes { get; set; }
+        public bool IsAdHoc { get; set; }
+    }
+
+    public class InspectionDraftRequest
+    {
+        public int EntryId { get; set; }
+        public string? ReceiverName { get; set; }
+        public string? InspectionNotes { get; set; }
+        public List<InspectionLineDto> Lines { get; set; } = new();
+    }
+
+    public class InspectionSubmitRequest
+    {
+        public int EntryId { get; set; }
+        public string? ReceiverName { get; set; }
+        public string? InspectionNotes { get; set; }
+        public List<InspectionLineDto> Lines { get; set; } = new();
     }
 
     public class ReceivingGroupViewModel
@@ -73,7 +116,7 @@ public class ReceivingLogModel : PageModel
 
     public async Task OnGetAsync()
     {
-        // 1. Load Admin Verification Queue (entries that need Materials Admin approval)
+        // 1. Load Admin Check-In Verification Queue (entries that need Materials Admin PO/Job approval)
         AdminPendingShipments = await _context.ReceivingLogs
             .Where(r => !r.IsAdminVerified)
             .OrderByDescending(r => r.ArrivalDateTime)
@@ -81,7 +124,15 @@ public class ReceivingLogModel : PageModel
 
         TotalAdminPendingCount = AdminPendingShipments.Count;
 
-        // 2. Load verified landed entries
+        // 2. Load Admin Inspection Review Queue (inspected shipments awaiting admin audit)
+        AdminInspectionApprovalQueue = await _context.ReceivingLogs
+            .Where(r => r.Status == "Pending Admin Approval")
+            .OrderByDescending(r => r.ReceiveEndTime ?? r.ArrivalDateTime)
+            .ToListAsync();
+
+        TotalAdminInspectionCount = AdminInspectionApprovalQueue.Count;
+
+        // 3. Load verified landed entries
         var query = _context.ReceivingLogs
             .Where(r => r.IsAdminVerified)
             .AsQueryable();
@@ -89,17 +140,17 @@ public class ReceivingLogModel : PageModel
         // Status Filter
         if (StatusFilter == "active")
         {
-            query = query.Where(r => r.Status != "Complete");
+            query = query.Where(r => r.Status != "Complete" && r.Status != "Approved - Pending QA");
         }
         else if (StatusFilter == "completed")
         {
-            query = query.Where(r => r.Status == "Complete");
+            query = query.Where(r => r.Status == "Complete" || r.Status == "Approved - Pending QA");
         }
 
         var allVerified = await query.ToListAsync();
 
         TotalLandedCount = allVerified.Count;
-        TotalInInspectionCount = allVerified.Count(r => r.Status == "In Inspection");
+        TotalInInspectionCount = allVerified.Count(r => r.Status == "In Inspection" || r.Status == "Inspecting");
         TotalPalletsCount = allVerified.Sum(r => r.PalletCount);
         TotalBoxesCount = allVerified.Sum(r => r.BoxCount);
 
@@ -385,6 +436,368 @@ public class ReceivingLogModel : PageModel
         await _context.SaveChangesAsync();
 
         TempData["SuccessMessage"] = $"Shipment {entry.JpKey} relocated to {newStagingLocation}.";
+
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+    }
+
+    // -------------------------------------------------------------
+    // Inspection Modal API & Workflow Handlers
+    // -------------------------------------------------------------
+
+    public async Task<IActionResult> OnGetInspectionDataAsync(int entryId, string? receiverName)
+    {
+        var entry = await _context.ReceivingLogs.FindAsync(entryId);
+        if (entry == null) return NotFound(new { error = "Shipment not found" });
+
+        // If newly inspecting, transition status to Inspecting and stamp ReceiveStartTime
+        if (entry.Status == "Landed - Pending Inspection" || entry.Status == "In Yard")
+        {
+            entry.Status = "Inspecting";
+            entry.ReceiveStartTime ??= DateTime.Now;
+        }
+
+        if (!string.IsNullOrWhiteSpace(receiverName) && (string.IsNullOrWhiteSpace(entry.ReceiverName) || entry.ReceiverName == "Receiver"))
+        {
+            entry.ReceiverName = receiverName.Trim();
+        }
+
+        await _context.SaveChangesAsync();
+
+        // 1. Resolve Lines: DB table -> Draft JSON -> VISTA BOM CSV
+        List<InspectionLineDto> lines = new();
+
+        var dbLines = await _context.InspectionLines
+            .Where(l => l.ReceivingLogEntryId == entryId)
+            .OrderBy(l => l.Id)
+            .ToListAsync();
+
+        if (dbLines.Count > 0)
+        {
+            lines = dbLines.Select(l => new InspectionLineDto
+            {
+                Id = l.Id,
+                ReceivingLogEntryId = l.ReceivingLogEntryId,
+                JpKey = l.JpKey,
+                PoNumber = l.PoNumber,
+                PoLineNumber = l.PoLineNumber,
+                BomId = l.BomId,
+                ItemDescription = l.ItemDescription,
+                QuantityOrdered = l.QuantityOrdered,
+                QuantityPreviouslyReceived = l.QuantityPreviouslyReceived,
+                QuantityDue = l.QuantityDue,
+                QuantityReceivedThisShipment = l.QuantityReceivedThisShipment,
+                UnitOfMeasure = l.UnitOfMeasure,
+                IsDescriptionMatched = l.IsDescriptionMatched,
+                HeatNumber = l.HeatNumber,
+                SerialNumber = l.SerialNumber,
+                StorageLocation = l.StorageLocation,
+                Notes = l.Notes,
+                IsAdHoc = false
+            }).ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(entry.InspectionDraftJson))
+        {
+            try
+            {
+                var draft = JsonSerializer.Deserialize<List<InspectionLineDto>>(entry.InspectionDraftJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (draft != null && draft.Count > 0)
+                {
+                    lines = draft;
+                }
+            }
+            catch { }
+        }
+
+        if (lines.Count == 0)
+        {
+            var importService = new ShipmentImportService();
+            var bomLines = importService.LoadVistaBomForPo(entry.PoNumber, entry.JpKey, entry.Id);
+            lines = bomLines.Select(l => new InspectionLineDto
+            {
+                Id = l.Id,
+                ReceivingLogEntryId = l.ReceivingLogEntryId,
+                JpKey = l.JpKey,
+                PoNumber = l.PoNumber,
+                PoLineNumber = l.PoLineNumber,
+                BomId = l.BomId,
+                ItemDescription = l.ItemDescription,
+                QuantityOrdered = l.QuantityOrdered,
+                QuantityPreviouslyReceived = l.QuantityPreviouslyReceived,
+                QuantityDue = l.QuantityDue,
+                QuantityReceivedThisShipment = l.QuantityReceivedThisShipment,
+                UnitOfMeasure = l.UnitOfMeasure,
+                IsDescriptionMatched = l.IsDescriptionMatched,
+                HeatNumber = l.HeatNumber,
+                SerialNumber = l.SerialNumber,
+                StorageLocation = string.IsNullOrWhiteSpace(l.StorageLocation) ? entry.StagingLocation : l.StorageLocation,
+                Notes = l.Notes,
+                IsAdHoc = false
+            }).ToList();
+        }
+
+        // 2. Load Autocomplete Suggestions from Job 251078 Inventory
+        var materials = await _context.Materials
+            .Where(m => m.JobNumber == "251078" || string.IsNullOrEmpty(m.JobNumber) || m.JobNumber == entry.JobNumber)
+            .ToListAsync();
+
+        var heatNumbers = materials
+            .Select(m => m.HeatNumber)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .SelectMany(h => h.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            .Select(h => h.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(h => h)
+            .ToList();
+
+        var serialNumbers = materials
+            .Select(m => m.SerialNumber)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .SelectMany(s => s.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+
+        var binLocations = materials
+            .Select(m => m.BinLocation)
+            .Where(b => !string.IsNullOrWhiteSpace(b))
+            .Select(b => b.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(b => b)
+            .ToList();
+
+        var standardYardLocations = new[] { "4 D 2 2", "4D22", "Walkway", "Bay 1", "Bay 2", "Yard Row A", "Yard Row B", "Quarantine" };
+        foreach (var def in standardYardLocations)
+        {
+            if (!binLocations.Contains(def, StringComparer.OrdinalIgnoreCase))
+                binLocations.Add(def);
+        }
+
+        // Lookup dictionary mapping BOM ID / Description to previously logged HT#, Serial#, Bin
+        var catalog = materials
+            .GroupBy(m => (m.BomId ?? "").Trim().ToLowerInvariant())
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .ToDictionary(
+                g => g.Key,
+                g => new
+                {
+                    heatNumbers = g.Select(x => x.HeatNumber).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList(),
+                    serialNumbers = g.Select(x => x.SerialNumber).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList(),
+                    binLocations = g.Select(x => x.BinLocation).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList()
+                }
+            );
+
+        return new JsonResult(new
+        {
+            id = entry.Id,
+            jpKey = entry.JpKey,
+            jobNumber = entry.JobNumber ?? "251078",
+            poNumber = entry.PoNumber,
+            vendorName = entry.VendorName,
+            packingSlipNumber = entry.PackingSlipNumber,
+            bolNumber = entry.BolNumber,
+            packageSummary = entry.PackageSummary,
+            stagingLocation = entry.StagingLocation,
+            loadType = entry.LoadType,
+            arrivalDateTime = entry.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt"),
+            receiveStartTime = entry.ReceiveStartTime?.ToString("MMM d, yyyy h:mm tt") ?? DateTime.Now.ToString("MMM d, yyyy h:mm tt"),
+            receiveEndTime = entry.ReceiveEndTime?.ToString("MMM d, yyyy h:mm tt") ?? "",
+            receiverName = entry.ReceiverName ?? "Receiver",
+            status = entry.Status,
+            inspectionNotes = entry.InspectionNotes ?? "",
+            lines,
+            autocomplete = new
+            {
+                heatNumbers,
+                serialNumbers,
+                binLocations,
+                catalog
+            }
+        });
+    }
+
+    public async Task<IActionResult> OnPostSaveInspectionDraftAsync([FromBody] InspectionDraftRequest request)
+    {
+        if (request == null || request.EntryId <= 0) return BadRequest();
+
+        var entry = await _context.ReceivingLogs.FindAsync(request.EntryId);
+        if (entry == null) return NotFound();
+
+        if (entry.Status == "Landed - Pending Inspection" || entry.Status == "In Yard")
+        {
+            entry.Status = "Inspecting";
+            entry.ReceiveStartTime ??= DateTime.Now;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ReceiverName))
+        {
+            entry.ReceiverName = request.ReceiverName.Trim();
+        }
+
+        entry.InspectionNotes = request.InspectionNotes;
+        entry.InspectionDraftJson = JsonSerializer.Serialize(request.Lines);
+
+        await _context.SaveChangesAsync();
+
+        return new JsonResult(new
+        {
+            success = true,
+            savedAt = DateTime.Now.ToString("h:mm:ss tt")
+        });
+    }
+
+    public async Task<IActionResult> OnPostSubmitInspectionAsync([FromBody] InspectionSubmitRequest request)
+    {
+        if (request == null || request.EntryId <= 0) return BadRequest();
+
+        var entry = await _context.ReceivingLogs.FindAsync(request.EntryId);
+        if (entry == null) return NotFound();
+
+        entry.Status = "Pending Admin Approval";
+        entry.ReceiveStartTime ??= DateTime.Now;
+        entry.ReceiveEndTime = DateTime.Now;
+
+        if (!string.IsNullOrWhiteSpace(request.ReceiverName))
+        {
+            entry.ReceiverName = request.ReceiverName.Trim();
+        }
+
+        entry.InspectionNotes = request.InspectionNotes;
+        entry.InspectionDraftJson = JsonSerializer.Serialize(request.Lines);
+
+        // Persist into InspectionLines table
+        var existing = _context.InspectionLines.Where(l => l.ReceivingLogEntryId == entry.Id);
+        _context.InspectionLines.RemoveRange(existing);
+
+        int lineIdx = 1;
+        foreach (var l in request.Lines)
+        {
+            _context.InspectionLines.Add(new InspectionLineItem
+            {
+                ReceivingLogEntryId = entry.Id,
+                JpKey = entry.JpKey,
+                PoNumber = entry.PoNumber,
+                PoLineNumber = !string.IsNullOrWhiteSpace(l.PoLineNumber) ? l.PoLineNumber : lineIdx.ToString("0.00"),
+                BomId = l.BomId ?? "",
+                ItemDescription = l.ItemDescription ?? "",
+                QuantityOrdered = l.QuantityOrdered,
+                QuantityPreviouslyReceived = l.QuantityPreviouslyReceived,
+                QuantityDue = l.QuantityDue,
+                UnitOfMeasure = string.IsNullOrWhiteSpace(l.UnitOfMeasure) ? "EA" : l.UnitOfMeasure,
+                IsDescriptionMatched = l.IsDescriptionMatched,
+                QuantityReceivedThisShipment = l.QuantityReceivedThisShipment,
+                HeatNumber = l.HeatNumber ?? "",
+                SerialNumber = l.SerialNumber ?? "",
+                StorageLocation = l.StorageLocation ?? "",
+                Notes = l.Notes ?? ""
+            });
+            lineIdx++;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return new JsonResult(new
+        {
+            success = true,
+            message = $"Shipment {entry.JpKey} submitted for Materials Admin approval.",
+            redirectUrl = Url.Page("/ReceivingLog")
+        });
+    }
+
+    public async Task<IActionResult> OnPostApproveInspectionAsync(int entryId, string? adminNotes)
+    {
+        var entry = await _context.ReceivingLogs.FindAsync(entryId);
+        if (entry == null) return NotFound();
+
+        entry.Status = "Approved - Pending QA";
+        entry.ReceivingCompletedAt = DateTime.Now;
+
+        if (!string.IsNullOrWhiteSpace(adminNotes))
+        {
+            entry.Notes = string.IsNullOrWhiteSpace(entry.Notes)
+                ? $"[Admin Audit Approved]: {adminNotes}"
+                : $"{entry.Notes} | [Admin Audit Approved]: {adminNotes}";
+        }
+
+        var lines = await _context.InspectionLines
+            .Where(l => l.ReceivingLogEntryId == entryId)
+            .ToListAsync();
+
+        if (lines.Count == 0 && !string.IsNullOrWhiteSpace(entry.InspectionDraftJson))
+        {
+            try
+            {
+                var dtoList = JsonSerializer.Deserialize<List<InspectionLineDto>>(entry.InspectionDraftJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (dtoList != null)
+                {
+                    lines = dtoList.Select(d => new InspectionLineItem
+                    {
+                        ReceivingLogEntryId = entryId,
+                        JpKey = entry.JpKey,
+                        PoNumber = entry.PoNumber,
+                        BomId = d.BomId,
+                        ItemDescription = d.ItemDescription,
+                        QuantityOrdered = d.QuantityOrdered,
+                        QuantityPreviouslyReceived = d.QuantityPreviouslyReceived,
+                        QuantityDue = d.QuantityDue,
+                        UnitOfMeasure = d.UnitOfMeasure,
+                        IsDescriptionMatched = d.IsDescriptionMatched,
+                        QuantityReceivedThisShipment = d.QuantityReceivedThisShipment,
+                        HeatNumber = d.HeatNumber ?? "",
+                        SerialNumber = d.SerialNumber ?? "",
+                        StorageLocation = d.StorageLocation ?? "",
+                        Notes = d.Notes ?? ""
+                    }).ToList();
+                }
+            }
+            catch { }
+        }
+
+        int addedCount = 0;
+        foreach (var line in lines.Where(l => l.QuantityReceivedThisShipment > 0))
+        {
+            _context.Materials.Add(new MaterialItem
+            {
+                JobNumber = !string.IsNullOrWhiteSpace(entry.JobNumber) ? entry.JobNumber : "251078",
+                PoNumber = entry.PoNumber,
+                ReceiverId = !string.IsNullOrWhiteSpace(entry.RecId) ? entry.RecId : $"REC-{entry.Id:D4}",
+                VendorName = entry.VendorName,
+                Description = line.ItemDescription,
+                BomId = line.BomId,
+                QuantityShipped = line.QuantityOrdered,
+                QuantityReceived = line.QuantityReceivedThisShipment,
+                Unit = string.IsNullOrWhiteSpace(line.UnitOfMeasure) ? "EA" : line.UnitOfMeasure,
+                HeatNumber = line.HeatNumber ?? "",
+                SerialNumber = line.SerialNumber ?? "",
+                BinLocation = line.StorageLocation ?? "",
+                ReceivedBy = entry.ReceiverName ?? "Receiver",
+                ReceivedDate = DateTime.Now,
+                Status = "Received - Pending QA"
+            });
+            addedCount++;
+
+            line.QuantityPreviouslyReceived += line.QuantityReceivedThisShipment;
+            line.QuantityDue = Math.Max(0, line.QuantityOrdered - line.QuantityPreviouslyReceived);
+        }
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Shipment {entry.JpKey} (PO {entry.PoNumber} - {entry.VendorName}) approved by Materials Admin! {addedCount} line items posted to Job 251078 Materials Inventory.";
+
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+    }
+
+    public async Task<IActionResult> OnPostReturnInspectionAsync(int entryId, string returnReason)
+    {
+        var entry = await _context.ReceivingLogs.FindAsync(entryId);
+        if (entry == null) return NotFound();
+
+        entry.Status = "Inspecting";
+        entry.InspectionNotes = $"[Returned by Admin]: {returnReason} | Previous: {entry.InspectionNotes}";
+
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Shipment {entry.JpKey} returned to inspector ({entry.ReceiverName}) for revision: {returnReason}";
 
         return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
     }

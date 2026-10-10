@@ -13,6 +13,7 @@ public class MaterialItem
     public decimal QuantityReceived { get; set; }
     public string Unit { get; set; } = "EA";
     public string HeatNumber { get; set; } = string.Empty;
+    public string SerialNumber { get; set; } = string.Empty;
     public string BinLocation { get; set; } = string.Empty;
     public string ReceivedBy { get; set; } = string.Empty;
     public DateTime? ReceivedDate { get; set; }

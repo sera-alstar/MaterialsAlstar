@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<MaterialItem> Materials => Set<MaterialItem>();
     public DbSet<ExpectedOrder> ExpectedOrders => Set<ExpectedOrder>();
     public DbSet<ReceivingLogEntry> ReceivingLogs => Set<ReceivingLogEntry>();
+    public DbSet<InspectionLineItem> InspectionLines => Set<InspectionLineItem>();
 }
 
 

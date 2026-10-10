@@ -37,4 +37,10 @@ public class ReceivingLogEntry
     public string? DocumentLink { get; set; } // Link to Drive folder / documents
     public DateTime? ReceivingCompletedAt { get; set; }
     public string? RecId { get; set; } // e.g. REC-0001
+
+    // Inspection Metadata & Progress
+    public DateTime? ReceiveStartTime { get; set; } // Set when physical inspection starts
+    public DateTime? ReceiveEndTime { get; set; } // Set when inspection is submitted
+    public string? InspectionDraftJson { get; set; } // Auto-saved draft data for in-progress inspection
+    public string? InspectionNotes { get; set; } // Inspector notes on completion
 }

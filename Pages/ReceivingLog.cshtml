@@ -37,6 +37,12 @@
             <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
                 <i class="bi bi-geo-alt-fill me-1"></i> Physical Yard Check-In Queue
             </span>
+            @if (Model.TotalAdminInspectionCount > 0)
+            {
+                <span class="badge bg-primary text-white border px-2 py-1 small">
+                    <i class="bi bi-shield-check me-1"></i> @Model.TotalAdminInspectionCount Awaiting Inspection Audit
+                </span>
+            }
             @if (Model.TotalAdminPendingCount > 0)
             {
                 <span class="badge bg-warning text-dark border border-warning px-2 py-1 small">
@@ -55,6 +61,85 @@
         </div>
     </div>
 </div>
+
+<!-- Materials Admin Inspection Review Queue (Inspected shipments awaiting Admin Audit before posting to Materials Inventory) -->
+@if (Model.AdminInspectionApprovalQueue.Count > 0)
+{
+    <div class="px-3 pt-3">
+        <div class="card border-primary shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-primary text-white border-bottom border-primary d-flex align-items-center justify-content-between py-2 px-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-check fs-5"></i>
+                    <div>
+                        <strong class="fs-6">Materials Admin Inspection Review Queue</strong>
+                        <span class="badge bg-white text-primary rounded-pill ms-2">@Model.AdminInspectionApprovalQueue.Count shipments awaiting admin audit</span>
+                    </div>
+                </div>
+                <span class="text-white-50 small">
+                    Physical count completed &bull; Review HT#s, Serial#s &amp; approve into Job 251078 Materials Inventory
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>JP Key</th>
+                            <th>Job #</th>
+                            <th>PO #</th>
+                            <th>Vendor</th>
+                            <th>Packing Slip / BOL</th>
+                            <th>Load Type</th>
+                            <th>Staging</th>
+                            <th>Inspector</th>
+                            <th>Timing &amp; Duration</th>
+                            <th>Inspector Notes</th>
+                            <th style="text-align: right;">Admin Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.AdminInspectionApprovalQueue)
+                        {
+                            <tr>
+                                <td><span class="badge bg-dark font-monospace fw-bold fs-6">@p.JpKey</span></td>
+                                <td><span class="hs-badge-job">@(p.JobNumber ?? "251078")</span></td>
+                                <td><span class="font-monospace fw-bold text-dark">@p.PoNumber</span></td>
+                                <td class="fw-bold">@p.VendorName</td>
+                                <td>
+                                    <div class="font-monospace small">PS: @p.PackingSlipNumber</div>
+                                    <div class="font-monospace text-muted" style="font-size: 11px;">BOL: @p.BolNumber</div>
+                                </td>
+                                <td><span class="badge bg-light text-dark border">@p.LoadType</span></td>
+                                <td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">📍 @p.StagingLocation</span></td>
+                                <td>
+                                    <span class="fw-semibold text-dark"><i class="bi bi-person me-1"></i>@(p.ReceiverName ?? "Receiver")</span>
+                                </td>
+                                <td>
+                                    <div class="small fw-semibold text-dark">Submitted: @(p.ReceiveEndTime?.ToString("MMM d, h:mm tt") ?? "--")</div>
+                                    @if (p.ReceiveStartTime.HasValue && p.ReceiveEndTime.HasValue)
+                                    {
+                                        var duration = p.ReceiveEndTime.Value - p.ReceiveStartTime.Value;
+                                        <div class="text-muted" style="font-size: 11px;">Inspection time: @((int)Math.Max(1, duration.TotalMinutes)) mins</div>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 160px;" title="@p.InspectionNotes">
+                                        @(string.IsNullOrWhiteSpace(p.InspectionNotes) ? "--" : p.InspectionNotes)
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <button type="button" class="btn btn-sm btn-primary fw-bold"
+                                            onclick="openAdminReviewModal(@p.Id, '@p.JpKey', '@p.PoNumber', '@Html.Raw(p.VendorName)', '@(p.JobNumber ?? "251078")')">
+                                        <i class="bi bi-shield-check me-1"></i> Review &amp; Approve
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- Materials Admin Verification Queue (Alert Section for Ad-Hoc / Unscheduled Shipments) -->
 @if (Model.AdminPendingShipments.Count > 0)
@@ -174,7 +259,7 @@
                     <span class="text-muted small">shipments</span>
                 </div>
                 <div class="text-muted small mt-1">
-                    Physically arrived &bull; Awaiting receiving
+                    Physically arrived &bull; Awaiting or in receiving
                 </div>
             </div>
         </div>
@@ -208,24 +293,24 @@
                     <span class="text-muted small">active</span>
                 </div>
                 <div class="text-muted small mt-1">
-                    Receiver assigned &bull; MRR in progress
+                    Receiver assigned &bull; Physical count in progress
                 </div>
             </div>
         </div>
 
-        <!-- Admin Verification Pending -->
+        <!-- Admin Queues (Check-In & Inspection Audit) -->
         <div class="col-12 col-sm-6 col-lg-3">
-            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 @(Model.TotalAdminPendingCount > 0 ? "border-warning" : "border-secondary")">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 @(Model.TotalAdminInspectionCount > 0 ? "border-primary" : (Model.TotalAdminPendingCount > 0 ? "border-warning" : "border-secondary"))">
                 <div class="d-flex align-items-center justify-content-between mb-1">
-                    <span class="text-muted small fw-semibold text-uppercase">Admin Queue</span>
-                    <i class="bi bi-shield-check @(Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-muted") fs-5"></i>
+                    <span class="text-muted small fw-semibold text-uppercase">Admin Queues</span>
+                    <i class="bi bi-shield-check @(Model.TotalAdminInspectionCount > 0 ? "text-primary" : (Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-muted")) fs-5"></i>
                 </div>
                 <div class="d-flex align-items-baseline gap-2">
-                    <span class="fs-2 fw-bold @(Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-dark")">@Model.TotalAdminPendingCount</span>
-                    <span class="text-muted small">pending review</span>
+                    <span class="fs-2 fw-bold @(Model.TotalAdminInspectionCount > 0 ? "text-primary" : (Model.TotalAdminPendingCount > 0 ? "text-warning" : "text-dark"))">@(Model.TotalAdminInspectionCount + Model.TotalAdminPendingCount)</span>
+                    <span class="text-muted small">pending action</span>
                 </div>
                 <div class="text-muted small mt-1">
-                    Unscheduled / client-supplied entries
+                    <span class="text-primary fw-semibold">@Model.TotalAdminInspectionCount</span> audit &bull; <span class="text-warning fw-semibold">@Model.TotalAdminPendingCount</span> check-in
                 </div>
             </div>
         </div>
@@ -521,15 +606,31 @@
 
                                     <!-- Status -->
                                     <td>
-                                        @if (item.Status == "In Inspection")
+                                        @if (item.Status == "In Inspection" || item.Status == "Inspecting")
                                         {
                                             <span class="badge bg-info-subtle text-dark border border-info-subtle small">
-                                                <i class="bi bi-search me-1"></i> Inspecting
+                                                <i class="bi bi-clipboard-pulse me-1 text-info"></i> Inspecting
                                             </span>
                                             @if (!string.IsNullOrEmpty(item.ReceiverName))
                                             {
                                                 <div class="text-muted" style="font-size: 10px;">@item.ReceiverName</div>
                                             }
+                                        }
+                                        else if (item.Status == "Pending Admin Approval")
+                                        {
+                                            <span class="badge bg-warning-subtle text-dark border border-warning small">
+                                                <i class="bi bi-shield-exclamation me-1 text-warning"></i> Audit Review
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(item.ReceiverName))
+                                            {
+                                                <div class="text-muted" style="font-size: 10px;">By @item.ReceiverName</div>
+                                            }
+                                        }
+                                        else if (item.Status == "Approved - Pending QA")
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                                                <i class="bi bi-patch-check me-1"></i> Approved (Pre-QA)
+                                            </span>
                                         }
                                         else if (item.Status == "Complete")
                                         {
@@ -546,16 +647,38 @@
                                     </td>
 
                                     <!-- Action -->
-                                    <td style="text-align: right;">
-                                        @if (item.Status != "Complete" && item.Status != "In Inspection")
+                                    <td style="text-align: right; white-space: nowrap;">
+                                        @if (item.Status == "Pending Admin Approval")
                                         {
-                                            <form method="post" asp-page-handler="StartInspection" class="d-inline" onclick="event.stopPropagation();">
-                                                <input type="hidden" name="entryId" value="@item.Id" />
-                                                <input type="hidden" name="receiverName" value="SR Inspector" />
-                                                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" title="Assign receiver &amp; start inspection">
-                                                    Inspect
-                                                </button>
-                                            </form>
+                                            <button type="button" class="btn btn-sm btn-warning text-dark py-0 px-2 fw-bold"
+                                                    onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
+                                                    title="Admin audit &amp; approval for received materials">
+                                                <i class="bi bi-shield-check me-1"></i> Review
+                                            </button>
+                                        }
+                                        else if (item.Status == "In Inspection" || item.Status == "Inspecting")
+                                        {
+                                            <button type="button" class="btn btn-sm btn-info text-dark py-0 px-2 fw-semibold"
+                                                    onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.ReceiverName ?? "SR Inspector")')"
+                                                    title="Resume physical inspection">
+                                                <i class="bi bi-play-circle me-1"></i> Resume
+                                            </button>
+                                        }
+                                        else if (item.Status == "Approved - Pending QA" || item.Status == "Complete")
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2 fw-semibold"
+                                                    onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
+                                                    title="View inspection records">
+                                                <i class="bi bi-check-circle me-1"></i> View
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold"
+                                                    onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', 'SR Receiver')"
+                                                    title="Start physical inspection">
+                                                <i class="bi bi-clipboard-check me-1"></i> Inspect
+                                            </button>
                                         }
                                         <button type="button" class="btn btn-sm btn-light border py-0 px-2 ms-1"
                                                 onclick="event.stopPropagation(); openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
@@ -838,6 +961,282 @@
         </div>
     </div>
 </div>
+
+<form id="antiForgeryForm" style="display:none;">@Html.AntiForgeryToken()</form>
+
+<!-- PHYSICAL RECEIVING INSPECTION MODAL -->
+<div class="modal fade" id="inspectionModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="inspectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <!-- Modal Header -->
+            <div class="modal-header bg-dark text-white py-2 px-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap flex-grow-1">
+                    <span class="badge bg-primary font-monospace fs-6 px-2 py-1" id="inspModalJpKey">JP Key</span>
+                    <div class="flex-grow-1">
+                        <h5 class="modal-title fw-bold mb-0 text-white fs-6 fs-md-5" id="inspectionModalLabel">
+                            Shipment Inspection: <span id="inspModalVendor">Vendor</span>
+                        </h5>
+                        <div class="text-light opacity-75 small font-monospace" style="font-size: 0.8rem;">
+                            PO: <span id="inspModalPo" class="fw-bold"></span> &bull; 
+                            Job: <span id="inspModalJob">251078</span> &bull;
+                            Slip: <span id="inspModalSlip"></span> &bull; 
+                            BOL: <span id="inspModalBol"></span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Top Right Status / Close -->
+                <div class="d-flex align-items-center gap-2 ms-auto mt-1 mt-sm-0">
+                    <span id="inspSaveBadge" class="badge bg-secondary-subtle text-secondary border px-2 py-1 small">
+                        <i class="bi bi-clock me-1"></i> Ready
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-light" onclick="closeInspectionModalWithSave()" title="Save progress and close">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Inspection Meta Bar -->
+            <div class="bg-light border-bottom px-3 py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-person-badge text-primary fs-5"></i>
+                            <div class="flex-grow-1">
+                                <label class="form-label text-muted small mb-0 fw-semibold">Inspector / Receiver</label>
+                                <input type="text" id="inspReceiverName" class="form-control form-control-sm fw-bold" placeholder="Inspector Name" oninput="triggerDebouncedSave()" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-6 col-md-3">
+                        <div class="small text-muted" style="font-size: 11px;">Landed in Yard:</div>
+                        <div class="fw-semibold text-dark small" id="inspYardArrival">--</div>
+                    </div>
+                    <div class="col-6 col-sm-6 col-md-3">
+                        <div class="small text-muted" style="font-size: 11px;">Inspection Started:</div>
+                        <div class="fw-semibold text-dark small" id="inspStartTime">--</div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-md-3">
+                        <div class="small text-muted" style="font-size: 11px;">Staging Location:</div>
+                        <span class="badge bg-info-subtle text-dark border border-info-subtle font-monospace" id="inspStaging">📍 Walkway</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body p-2 p-md-3">
+                <!-- Search, Filter & Quick Actions Toolbar -->
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 bg-light p-2 rounded-2 border">
+                    <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                        <!-- View Mode Toggle (Cards for Mobile/Touch, Table for Wide Screens) -->
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Inspection layout view">
+                            <button type="button" class="btn btn-outline-secondary" id="btnInspViewCards" onclick="switchInspectionView('cards')" title="Cards View (Optimized for Mobile/Touch)">
+                                <i class="bi bi-grid me-1"></i>Cards
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary active" id="btnInspViewTable" onclick="switchInspectionView('table')" title="Table View (Desktop)">
+                                <i class="bi bi-table me-1"></i>Table
+                            </button>
+                        </div>
+
+                        <!-- Line Search Filter -->
+                        <div class="position-relative flex-grow-1" style="min-width: 180px; max-width: 320px;">
+                            <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted small"></i>
+                            <input type="text" id="inspLineSearch" class="form-control form-control-sm ps-4" placeholder="Filter lines (desc, BOMID)..." oninput="filterInspectionTable()" />
+                        </div>
+
+                        <!-- Toggle Fully Received Switch -->
+                        <div class="form-check form-switch ms-1 my-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="inspToggleFullyReceived" onchange="filterInspectionTable()">
+                            <label class="form-check-label small fw-semibold text-muted text-nowrap" for="inspToggleFullyReceived">
+                                Show fully received (<span id="inspFullyRecHiddenCount">0</span> hidden)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                        <!-- Metric Summary Pills -->
+                        <span class="badge bg-white text-dark border small">Lines: <strong id="inspTotalLinesCount">0</strong></span>
+                        <span class="badge bg-white text-dark border small">Counted: <strong id="inspCountedLinesCount" class="text-primary">0</strong></span>
+                        <span class="badge bg-white text-dark border small">Pieces: <strong id="inspTotalPiecesCount" class="text-success">0</strong></span>
+
+                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick="addAdHocInspectionLine()" title="Add extra line not listed in VISTA BOM">
+                            <i class="bi bi-plus-circle me-1"></i> Add Unlisted Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Inspection Lines Table Container (Desktop / Wide Screen) -->
+                <div id="inspectionLinesTableContainer" class="table-responsive border rounded-2" style="max-height: 480px;">
+                    <table class="table table-sm table-hover align-middle mb-0" id="inspectionLinesTable" style="font-size: 12.5px;">
+                        <thead class="table-light sticky-top" style="z-index: 5;">
+                            <tr>
+                                <th style="width: 75px;">Line / BOM</th>
+                                <th style="min-width: 220px;">VISTA Ordered Item Description</th>
+                                <th style="width: 100px; text-align: center;">Ord / Prev / Due</th>
+                                <th style="width: 70px; text-align: center;" title="Confirm physical item matches description">Match</th>
+                                <th style="width: 130px; text-align: center;">Qty Rec'd</th>
+                                <th style="width: 160px;">Heat # (HT#)</th>
+                                <th style="width: 150px;">Serial / Tag #</th>
+                                <th style="width: 140px;">Bin Location</th>
+                                <th style="min-width: 130px;">Line Notes</th>
+                                <th style="width: 40px; text-align: center;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="inspectionLinesTbody">
+                            <!-- Populated dynamically via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Inspection Lines Mobile Cards Container (Mobile & Touch Friendly) -->
+                <div id="inspectionLinesCardsContainer" style="display: none;">
+                    <div id="inspectionLinesCardsList">
+                        <!-- Populated dynamically via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Overall Inspection Observations / Notes -->
+                <div class="mt-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-chat-left-text me-1"></i> Receiver Inspection Notes &amp; Discrepancies (OS&amp;D remarks, package condition)
+                    </label>
+                    <textarea id="inspOverallNotes" class="form-control form-control-sm" rows="2" placeholder="e.g. Crate arrived undamaged; verified against vendor packing slip; line 3 over-delivered by 1 pc." oninput="triggerDebouncedSave()"></textarea>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer bg-light d-flex flex-wrap justify-content-between align-items-center py-2 px-3 gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeInspectionModalWithSave()">
+                        <i class="bi bi-save me-1"></i> Save Draft &amp; Close
+                    </button>
+                    <span class="text-muted small fst-italic d-none d-sm-inline" id="inspAutoSaveFooterText">Changes auto-save automatically.</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-success fw-bold px-3 py-1 text-nowrap" onclick="submitInspectionForAdmin()">
+                        <i class="bi bi-send-check me-1"></i> Submit for Admin Approval
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MATERIALS ADMIN INSPECTION REVIEW & AUDIT MODAL -->
+<div class="modal fade" id="adminInspectionReviewModal" tabindex="-1" aria-labelledby="adminInspectionReviewLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-warning-subtle border-bottom border-warning py-2 px-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap flex-grow-1">
+                    <i class="bi bi-shield-check text-warning-emphasis fs-4"></i>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0 text-dark fs-6 fs-md-5" id="adminInspectionReviewLabel">
+                            Materials Admin Review &amp; Inventory Audit
+                        </h5>
+                        <div class="text-muted small font-monospace" style="font-size: 0.8rem;">
+                            JP Key: <strong id="adminRevJpKey" class="text-dark">--</strong> &bull;
+                            PO: <strong id="adminRevPo" class="text-dark">--</strong> &bull;
+                            Job: <strong id="adminRevJob" class="text-dark">251078</strong> &bull;
+                            Vendor: <strong id="adminRevVendor" class="text-dark">--</strong>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-2 p-md-3">
+                <!-- Audit Timeline Callout -->
+                <div class="p-2 p-md-3 mb-3 rounded-2 bg-light border row g-2 align-items-center">
+                    <div class="col-6 col-sm-3">
+                        <span class="text-muted small" style="font-size: 11px;">Inspected By:</span>
+                        <div class="fw-bold text-dark small fs-sm-6 text-truncate" id="adminRevInspector">--</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <span class="text-muted small" style="font-size: 11px;">Yard Arrival:</span>
+                        <div class="fw-semibold text-dark small" id="adminRevArrival">--</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <span class="text-muted small" style="font-size: 11px;">Inspection Window:</span>
+                        <div class="fw-semibold text-dark small" id="adminRevWindow">--</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <span class="text-muted small" style="font-size: 11px;">Current Status:</span>
+                        <div><span class="badge bg-warning text-dark border" id="adminRevStatus">Pending Approval</span></div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small mb-3">
+                    <i class="bi bi-info-circle-fill me-1"></i>
+                    <strong>Inventory Integration Notice:</strong> Approving this inspection will update the shipment status to <strong>Approved - Pending QA</strong> and write all items with a received quantity into the Job <strong>251078</strong> Materials inventory list.
+                </div>
+
+                <!-- Inspected Lines Header -->
+                <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-list-check me-1"></i> Inspected Line Items &amp; Physical Traceability</h6>
+
+                <!-- Inspected Lines Review Table (Desktop View) -->
+                <div id="adminRevLinesTableContainer" class="d-none d-lg-block table-responsive border rounded-2 mb-3" style="max-height: 380px;">
+                    <table class="table table-sm table-striped align-middle mb-0" style="font-size: 12.5px;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Line / BOM ID</th>
+                                <th>Item Description</th>
+                                <th style="text-align: center;">Ord / Prev / Rec'd</th>
+                                <th style="text-align: center;">Match?</th>
+                                <th>Heat # (HT#)</th>
+                                <th>Serial / Tag #</th>
+                                <th>Bin Location</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminRevLinesTbody">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Inspected Lines Review Cards (Mobile / Touch View) -->
+                <div id="adminRevLinesCardsContainer" class="d-lg-none mb-3">
+                    <div id="adminRevLinesCardsList">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- Inspector Notes Display -->
+                <div class="mb-3 p-2 rounded-2 bg-light border" id="adminRevNotesSection">
+                    <label class="form-label small fw-semibold text-muted mb-1">Inspector's Recorded Remarks:</label>
+                    <div class="small text-dark font-monospace" id="adminRevNotesDisplay">--</div>
+                </div>
+
+                <!-- Admin Action Notes Form -->
+                <form id="adminApproveForm" method="post" asp-page-handler="ApproveInspection">
+                    <input type="hidden" name="entryId" id="adminApproveEntryId" value="" />
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold text-dark mb-1">
+                            <i class="bi bi-pen me-1"></i> Admin Audit Comments / Sign-off Notes:
+                        </label>
+                        <input type="text" name="adminNotes" id="adminAuditNotesInput" class="form-control form-control-sm" placeholder="e.g. Verified Heat #s against MTRs; storage confirmed in Bin 4D22; Approved for QA." />
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer bg-light d-flex flex-wrap justify-content-between align-items-center py-2 px-3 gap-2">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="returnInspectionForRevision()">
+                    <i class="bi bi-arrow-return-left me-1"></i> Return for Revision
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success fw-bold px-3 py-1 text-nowrap" onclick="submitAdminApproval()">
+                        <i class="bi bi-check-circle-fill me-1"></i> Approve &amp; Commit to Inventory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Datalists for Autocomplete from Job 251078 Inventory -->
+<datalist id="dl_all_heat_numbers"></datalist>
+<datalist id="dl_all_serial_numbers"></datalist>
+<datalist id="dl_all_bin_locations"></datalist>
 
 @section Scripts {
 <script>
@@ -1286,6 +1685,966 @@
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function getAntiForgeryToken() {
+        var tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+        return tokenInput ? tokenInput.value : '';
+    }
+
+    function openReceivingDrawer(id, jpkey, job, po, vendor, slip, bol, packages, loadtype, staging, arrival, status, receiver, notes, photo) {
+        var fakeRow = {
+            dataset: {
+                id: id,
+                jpkey: jpkey,
+                job: job,
+                po: po,
+                vendor: vendor,
+                slip: slip,
+                bol: bol,
+                packages: packages,
+                loadtype: loadtype,
+                staging: staging,
+                arrival: arrival,
+                status: status,
+                receiver: receiver,
+                notes: notes,
+                photo: photo
+            }
+        };
+        openReceivingDrawerFromRow(fakeRow);
+    }
+
+    // =============================================================
+    // PHYSICAL SHIPMENT INSPECTION WORKFLOW (Job 251078 VISTA BOM)
+    // =============================================================
+    window.currentInspectionEntryId = 0;
+    window.currentInspectionLines = [];
+    window.currentInspectionViewMode = 'table';
+    window.inventoryAutocomplete = { heatNumbers: [], serialNumbers: [], binLocations: [], catalog: {} };
+    window.saveTimeout = null;
+    window.inspectionModalInstance = null;
+    window.adminReviewModalInstance = null;
+
+    function switchInspectionView(mode) {
+        window.currentInspectionViewMode = mode;
+        var btnCards = document.getElementById('btnInspViewCards');
+        var btnTable = document.getElementById('btnInspViewTable');
+        var containerTable = document.getElementById('inspectionLinesTableContainer');
+        var containerCards = document.getElementById('inspectionLinesCardsContainer');
+
+        if (mode === 'cards') {
+            if (btnCards) btnCards.classList.add('active');
+            if (btnTable) btnTable.classList.remove('active');
+            if (containerTable) containerTable.style.display = 'none';
+            if (containerCards) containerCards.style.display = 'block';
+        } else {
+            if (btnCards) btnCards.classList.remove('active');
+            if (btnTable) btnTable.classList.add('active');
+            if (containerTable) containerTable.style.display = 'block';
+            if (containerCards) containerCards.style.display = 'none';
+        }
+    }
+
+    function openInspectionModal(entryId, jpKey, poNumber, vendorName, receiverName) {
+        window.currentInspectionEntryId = entryId;
+
+        var modalEl = document.getElementById('inspectionModal');
+        if (!window.inspectionModalInstance) {
+            window.inspectionModalInstance = new bootstrap.Modal(modalEl);
+        }
+
+        // Auto-select cards on mobile screens (< 992px) or table on wider screens
+        var initialMode = window.innerWidth < 992 ? 'cards' : 'table';
+        switchInspectionView(initialMode);
+
+        // Set preliminary header values
+        document.getElementById('inspModalJpKey').innerText = jpKey || '--';
+        document.getElementById('inspModalVendor').innerText = vendorName || '--';
+        document.getElementById('inspModalPo').innerText = poNumber || '--';
+        document.getElementById('inspSaveBadge').className = 'badge bg-secondary-subtle text-secondary border px-2 py-1 small';
+        document.getElementById('inspSaveBadge').innerHTML = '<i class="bi bi-clock me-1"></i> Loading VISTA BOM...';
+        document.getElementById('inspLineSearch').value = '';
+        document.getElementById('inspToggleFullyReceived').checked = false;
+
+        var tbody = document.getElementById('inspectionLinesTbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-5 text-muted">' +
+                '<div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div>' +
+                'Ingesting VISTA BOM lines and Job 251078 inventory autocomplete...</td></tr>';
+        }
+        var cardsList = document.getElementById('inspectionLinesCardsList');
+        if (cardsList) {
+            cardsList.innerHTML = '<div class="text-center py-5 text-muted">' +
+                '<div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div>' +
+                'Ingesting VISTA BOM lines and Job 251078 inventory autocomplete...</div>';
+        }
+
+        window.inspectionModalInstance.show();
+
+        // Fetch live inspection data from server
+        fetch('/ReceivingLog?handler=InspectionData&entryId=' + entryId + '&receiverName=' + encodeURIComponent(receiverName || ''))
+            .then(function(res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
+            .then(function(data) {
+                document.getElementById('inspModalJob').innerText = data.jobNumber || '251078';
+                document.getElementById('inspModalSlip').innerText = data.packingSlipNumber || '--';
+                document.getElementById('inspModalBol').innerText = data.bolNumber || '--';
+                document.getElementById('inspReceiverName').value = data.receiverName || 'SR Inspector';
+                document.getElementById('inspYardArrival').innerText = data.arrivalDateTime || '--';
+                document.getElementById('inspStartTime').innerText = data.receiveStartTime || '--';
+                document.getElementById('inspStaging').innerText = '📍 ' + (data.stagingLocation || 'Walkway');
+                document.getElementById('inspOverallNotes').value = data.inspectionNotes || '';
+
+                window.currentInspectionLines = data.lines || [];
+                window.inventoryAutocomplete = data.autocomplete || { heatNumbers: [], serialNumbers: [], binLocations: [], catalog: {} };
+
+                // Populate Global Datalists for Autocomplete
+                if (window.inventoryAutocomplete) {
+                    var dlHt = document.getElementById('dl_all_heat_numbers');
+                    var dlSn = document.getElementById('dl_all_serial_numbers');
+                    var dlBin = document.getElementById('dl_all_bin_locations');
+
+                    if (dlHt && window.inventoryAutocomplete.heatNumbers) {
+                        dlHt.innerHTML = window.inventoryAutocomplete.heatNumbers.map(function(h) {
+                            return '<option value="' + escapeHtml(h) + '"></option>';
+                        }).join('');
+                    }
+                    if (dlSn && window.inventoryAutocomplete.serialNumbers) {
+                        dlSn.innerHTML = window.inventoryAutocomplete.serialNumbers.map(function(s) {
+                            return '<option value="' + escapeHtml(s) + '"></option>';
+                        }).join('');
+                    }
+                    if (dlBin && window.inventoryAutocomplete.binLocations) {
+                        dlBin.innerHTML = window.inventoryAutocomplete.binLocations.map(function(b) {
+                            return '<option value="' + escapeHtml(b) + '"></option>';
+                        }).join('');
+                    }
+                }
+
+                // Check LocalStorage Draft backup if available
+                try {
+                    var localKey = 'alstar_insp_draft_' + entryId;
+                    var localDraftStr = localStorage.getItem(localKey);
+                    if (localDraftStr) {
+                        var localDraft = JSON.parse(localDraftStr);
+                        if (localDraft && localDraft.lines && localDraft.lines.length === window.currentInspectionLines.length) {
+                            window.currentInspectionLines = localDraft.lines;
+                            if (localDraft.notes) document.getElementById('inspOverallNotes').value = localDraft.notes;
+                            if (localDraft.receiver) document.getElementById('inspReceiverName').value = localDraft.receiver;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Draft restoration notice:', e);
+                }
+
+                document.getElementById('inspSaveBadge').className = 'badge bg-success-subtle text-success border px-2 py-1 small';
+                document.getElementById('inspSaveBadge').innerHTML = '<i class="bi bi-check-circle me-1"></i> Ready';
+
+                renderInspectionLines();
+            })
+            .catch(function(err) {
+                console.error(err);
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">' +
+                        '<i class="bi bi-exclamation-triangle-fill me-2"></i>Failed to load VISTA BOM data. Please try again.</td></tr>';
+                }
+                if (cardsList) {
+                    cardsList.innerHTML = '<div class="text-center py-4 text-danger">' +
+                        '<i class="bi bi-exclamation-triangle-fill me-2"></i>Failed to load VISTA BOM data. Please try again.</div>';
+                }
+            });
+    }
+
+    function renderInspectionLines() {
+        var tbody = document.getElementById('inspectionLinesTbody');
+        var cardsList = document.getElementById('inspectionLinesCardsList');
+        if (!window.currentInspectionLines) return;
+
+        var query = (document.getElementById('inspLineSearch')?.value || '').toLowerCase().trim();
+        var showFullyReceived = document.getElementById('inspToggleFullyReceived')?.checked || false;
+
+        var hiddenFullyCount = 0;
+        var tableHtml = '';
+        var cardsHtml = '';
+
+        window.currentInspectionLines.forEach(function(line, idx) {
+            var ord = parseFloat(line.quantityOrdered) || 0;
+            var prev = parseFloat(line.quantityPreviouslyReceived) || 0;
+            var isFullyReceived = ord > 0 && prev >= ord;
+
+            if (isFullyReceived) {
+                hiddenFullyCount++;
+                if (!showFullyReceived) {
+                    return; // Skip rendering hidden fully received line by default
+                }
+            }
+
+            if (query) {
+                var desc = (line.itemDescription || '').toLowerCase();
+                var bom = (line.bomId || '').toLowerCase();
+                var poLine = (line.poLineNumber || '').toLowerCase();
+                var ht = (line.heatNumber || '').toLowerCase();
+                var loc = (line.storageLocation || '').toLowerCase();
+
+                if (!desc.includes(query) && !bom.includes(query) && !poLine.includes(query) && !ht.includes(query) && !loc.includes(query)) {
+                    return;
+                }
+            }
+
+            tableHtml += buildInspectionRowHtml(line, idx, isFullyReceived);
+            cardsHtml += buildInspectionCardHtml(line, idx, isFullyReceived);
+        });
+
+        var hiddenCountEl = document.getElementById('inspFullyRecHiddenCount');
+        if (hiddenCountEl) hiddenCountEl.innerText = hiddenFullyCount;
+
+        var emptyMsg = '<div class="text-center py-4 text-muted">' +
+            '<i class="bi bi-funnel me-1"></i>No matching lines found. ' +
+            (hiddenFullyCount > 0 && !showFullyReceived ? '<a href="javascript:void(0)" class="fw-semibold text-primary" onclick="document.getElementById(\'inspToggleFullyReceived\').click()">Show ' + hiddenFullyCount + ' fully received line(s)</a>' : '') +
+            '</div>';
+
+        if (tbody) {
+            if (tableHtml === '') {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">' +
+                    '<i class="bi bi-funnel me-1"></i>No matching lines found. ' +
+                    (hiddenFullyCount > 0 && !showFullyReceived ? '<a href="javascript:void(0)" class="fw-semibold text-primary" onclick="document.getElementById(\'inspToggleFullyReceived\').click()">Show ' + hiddenFullyCount + ' fully received line(s)</a>' : '') +
+                    '</td></tr>';
+            } else {
+                tbody.innerHTML = tableHtml;
+            }
+        }
+
+        if (cardsList) {
+            if (cardsHtml === '') {
+                cardsList.innerHTML = emptyMsg;
+            } else {
+                cardsList.innerHTML = cardsHtml;
+            }
+        }
+
+        updateSummaryMetrics();
+    }
+    window.renderInspectionTable = renderInspectionLines;
+
+    function buildInspectionRowHtml(line, idx, isFullyReceived) {
+        var bomKey = (line.bomId || '').trim().toLowerCase();
+        var catEntry = window.inventoryAutocomplete && window.inventoryAutocomplete.catalog ? window.inventoryAutocomplete.catalog[bomKey] : null;
+
+        // Suggested Heat Numbers
+        var suggestedHts = (catEntry && catEntry.heatNumbers && catEntry.heatNumbers.length > 0)
+            ? catEntry.heatNumbers
+            : (window.inventoryAutocomplete ? window.inventoryAutocomplete.heatNumbers.slice(0, 3) : []);
+
+        var htChipsHtml = '';
+        if (suggestedHts && suggestedHts.length > 0) {
+            htChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center" style="font-size: 10px;">' +
+                '<span class="text-muted" style="font-size: 9.5px;">Prev:</span>' +
+                suggestedHts.slice(0, 2).map(function(ht) {
+                    var safeHt = escapeHtml(ht).replace(/'/g, "\\'");
+                    return '<span class="insp-chip-pill" role="button" onclick="autofillField(' + idx + ', \'heatNumber\', \'' + safeHt + '\')" title="Autofill HT#">' + escapeHtml(ht) + '</span>';
+                }).join('') +
+            '</div>';
+        }
+
+        // Suggested Serial Numbers
+        var suggestedSerials = (catEntry && catEntry.serialNumbers && catEntry.serialNumbers.length > 0)
+            ? catEntry.serialNumbers
+            : [];
+        var serialChipsHtml = '';
+        if (suggestedSerials && suggestedSerials.length > 0) {
+            serialChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center" style="font-size: 10px;">' +
+                '<span class="text-muted" style="font-size: 9.5px;">Prev:</span>' +
+                suggestedSerials.slice(0, 2).map(function(s) {
+                    var safeSn = escapeHtml(s).replace(/'/g, "\\'");
+                    return '<span class="insp-chip-pill chip-serial" role="button" onclick="autofillField(' + idx + ', \'serialNumber\', \'' + safeSn + '\')" title="Autofill Serial">' + escapeHtml(s) + '</span>';
+                }).join('') +
+            '</div>';
+        }
+
+        // Suggested Storage Bins (Prioritizing 4 D 2 2 and catalog bins)
+        var suggestedBins = (catEntry && catEntry.binLocations && catEntry.binLocations.length > 0)
+            ? catEntry.binLocations
+            : ['4 D 2 2', '4D22', 'Walkway', 'Bay 1'];
+        var binChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center" style="font-size: 10px;">' +
+            '<span class="text-muted" style="font-size: 9.5px;">Bins:</span>' +
+            suggestedBins.slice(0, 3).map(function(b) {
+                var safeB = escapeHtml(b).replace(/'/g, "\\'");
+                return '<span class="insp-chip-pill chip-bin" role="button" onclick="autofillField(' + idx + ', \'storageLocation\', \'' + safeB + '\')" title="Autofill Bin">' + escapeHtml(b) + '</span>';
+            }).join('') +
+        '</div>';
+
+        var rowClass = isFullyReceived ? 'table-secondary opacity-75' : '';
+        var dueBadgeClass = line.quantityDue > 0 ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-muted border';
+
+        return '<tr class="' + rowClass + '" id="insp_row_' + idx + '">' +
+            // Line & BOM
+            '<td>' +
+                '<div class="fw-bold font-monospace text-dark">' + escapeHtml(line.poLineNumber || (idx + 1)) + '</div>' +
+                '<div class="text-muted font-monospace" style="font-size: 10.5px;">' + escapeHtml(line.bomId || '--') + '</div>' +
+                (isFullyReceived ? '<span class="badge bg-secondary text-white" style="font-size: 9px;">Fully Rec\'d</span>' : '') +
+            '</td>' +
+            // Description
+            '<td>' +
+                '<div class="fw-semibold text-dark">' + escapeHtml(line.itemDescription || '') + '</div>' +
+                (line.isAdHoc ? '<span class="badge bg-warning-subtle text-dark border border-warning small mt-1">Extra Item</span>' : '') +
+            '</td>' +
+            // Ord / Prev / Due
+            '<td style="text-align: center;">' +
+                '<div class="small fw-semibold">' +
+                    '<span title="Ordered">' + line.quantityOrdered + '</span> / ' +
+                    '<span class="text-muted" title="Previously Received">' + line.quantityPreviouslyReceived + '</span> / ' +
+                    '<span class="badge ' + dueBadgeClass + '" title="Quantity Due">' + line.quantityDue + '</span>' +
+                '</div>' +
+                '<div class="text-muted" style="font-size: 10px;">' + escapeHtml(line.unitOfMeasure || 'EA') + '</div>' +
+            '</td>' +
+            // Match Checkbox
+            '<td style="text-align: center;">' +
+                '<input type="checkbox" class="form-check-input" id="insp_line_isDescriptionMatched_' + idx + '" ' +
+                    (line.isDescriptionMatched ? 'checked' : '') +
+                    ' onchange="updateLineField(' + idx + ', \'isDescriptionMatched\', this.checked)" title="Confirm physical item matches description" />' +
+            '</td>' +
+            // Qty Rec'd Input
+            '<td style="text-align: center;">' +
+                '<div class="input-group input-group-sm">' +
+                    '<input type="number" min="0" step="any" class="form-control form-control-sm text-center fw-bold font-monospace" ' +
+                        'id="insp_line_quantityReceivedThisShipment_' + idx + '" ' +
+                        'value="' + (line.quantityReceivedThisShipment || 0) + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'quantityReceivedThisShipment\', parseFloat(this.value) || 0)" />' +
+                    '<button type="button" class="btn btn-outline-secondary btn-sm px-1" ' +
+                        'onclick="fillDueQty(' + idx + ', ' + line.quantityDue + ')" title="Receive all due (' + line.quantityDue + ')">All</button>' +
+                '</div>' +
+            '</td>' +
+            // Heat #
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_heat_numbers" ' +
+                    'id="insp_line_heatNumber_' + idx + '" ' +
+                    'placeholder="HT #" value="' + escapeHtml(line.heatNumber || '') + '" ' +
+                    'oninput="updateLineField(' + idx + ', \'heatNumber\', this.value)" />' +
+                htChipsHtml +
+            '</td>' +
+            // Serial #
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_serial_numbers" ' +
+                    'id="insp_line_serialNumber_' + idx + '" ' +
+                    'placeholder="Serial / Tag #" value="' + escapeHtml(line.serialNumber || '') + '" ' +
+                    'oninput="updateLineField(' + idx + ', \'serialNumber\', this.value)" />' +
+                serialChipsHtml +
+            '</td>' +
+            // Bin Location
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_bin_locations" ' +
+                    'id="insp_line_storageLocation_' + idx + '" ' +
+                    'placeholder="e.g. 4 D 2 2" value="' + escapeHtml(line.storageLocation || '') + '" ' +
+                    'oninput="updateLineField(' + idx + ', \'storageLocation\', this.value)" />' +
+                binChipsHtml +
+            '</td>' +
+            // Line Notes
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm" ' +
+                    'id="insp_line_notes_' + idx + '" ' +
+                    'placeholder="Line notes..." value="' + escapeHtml(line.notes || '') + '" ' +
+                    'oninput="updateLineField(' + idx + ', \'notes\', this.value)" />' +
+            '</td>' +
+            // Action (Delete if ad-hoc)
+            '<td style="text-align: center;">' +
+                (line.isAdHoc
+                    ? '<button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removeAdHocLine(' + idx + ')" title="Remove extra line"><i class="bi bi-trash"></i></button>'
+                    : '') +
+            '</td>' +
+        '</tr>';
+    }
+
+    // Touch-friendly Card Layout for Mobile & Responsive Inspection
+    function buildInspectionCardHtml(line, idx, isFullyReceived) {
+        var bomKey = (line.bomId || '').trim().toLowerCase();
+        var catEntry = window.inventoryAutocomplete && window.inventoryAutocomplete.catalog ? window.inventoryAutocomplete.catalog[bomKey] : null;
+
+        var suggestedHts = (catEntry && catEntry.heatNumbers && catEntry.heatNumbers.length > 0)
+            ? catEntry.heatNumbers
+            : (window.inventoryAutocomplete ? window.inventoryAutocomplete.heatNumbers.slice(0, 3) : []);
+
+        var htChipsHtml = '';
+        if (suggestedHts && suggestedHts.length > 0) {
+            htChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center">' +
+                suggestedHts.slice(0, 3).map(function(ht) {
+                    var safeHt = escapeHtml(ht).replace(/'/g, "\\'");
+                    return '<span class="insp-chip-pill" role="button" onclick="autofillField(' + idx + ', \'heatNumber\', \'' + safeHt + '\')" title="Autofill HT#">' + escapeHtml(ht) + '</span>';
+                }).join('') +
+            '</div>';
+        }
+
+        var suggestedSerials = (catEntry && catEntry.serialNumbers && catEntry.serialNumbers.length > 0)
+            ? catEntry.serialNumbers
+            : [];
+        var serialChipsHtml = '';
+        if (suggestedSerials && suggestedSerials.length > 0) {
+            serialChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center">' +
+                suggestedSerials.slice(0, 3).map(function(s) {
+                    var safeSn = escapeHtml(s).replace(/'/g, "\\'");
+                    return '<span class="insp-chip-pill chip-serial" role="button" onclick="autofillField(' + idx + ', \'serialNumber\', \'' + safeSn + '\')" title="Autofill Serial">' + escapeHtml(s) + '</span>';
+                }).join('') +
+            '</div>';
+        }
+
+        var suggestedBins = (catEntry && catEntry.binLocations && catEntry.binLocations.length > 0)
+            ? catEntry.binLocations
+            : ['4 D 2 2', '4D22', 'Walkway', 'Bay 1'];
+        var binChipsHtml = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center">' +
+            suggestedBins.slice(0, 4).map(function(b) {
+                var safeB = escapeHtml(b).replace(/'/g, "\\'");
+                return '<span class="insp-chip-pill chip-bin" role="button" onclick="autofillField(' + idx + ', \'storageLocation\', \'' + safeB + '\')" title="Autofill Bin">' + escapeHtml(b) + '</span>';
+            }).join('') +
+        '</div>';
+
+        var cardMatchedClass = line.isDescriptionMatched ? 'is-matched' : '';
+        var cardFullyRecClass = isFullyReceived ? 'is-fully-received' : '';
+        var dueBadgeClass = line.quantityDue > 0 ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-muted border';
+
+        return '<div class="insp-card ' + cardMatchedClass + ' ' + cardFullyRecClass + '" id="insp_card_box_' + idx + '">' +
+            // Header Bar
+            '<div class="d-flex align-items-center justify-content-between mb-2">' +
+                '<div class="d-flex align-items-center gap-1 flex-wrap">' +
+                    '<span class="badge bg-secondary font-monospace">Line ' + escapeHtml(line.poLineNumber || (idx + 1)) + '</span>' +
+                    '<span class="badge bg-light text-muted border font-monospace">' + escapeHtml(line.bomId || 'No BOM') + '</span>' +
+                    (isFullyReceived ? '<span class="badge bg-secondary text-white">Fully Rec\'d</span>' : '') +
+                    (line.isAdHoc ? '<span class="badge bg-warning-subtle text-dark border border-warning">Extra Item</span>' : '') +
+                '</div>' +
+                '<div class="d-flex align-items-center gap-1">' +
+                    '<span class="badge bg-light text-dark border">' + escapeHtml(line.unitOfMeasure || 'EA') + '</span>' +
+                    (line.isAdHoc ? '<button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" onclick="removeAdHocLine(' + idx + ')" title="Remove item"><i class="bi bi-trash fs-6"></i></button>' : '') +
+                '</div>' +
+            '</div>' +
+
+            // Non-truncated Item Description (Clear Physical Context)
+            '<div class="fw-bold text-dark fs-6 mb-2">' + escapeHtml(line.itemDescription || '') + '</div>' +
+
+            // Counts & Match Row
+            '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 bg-light rounded-2 border mb-2">' +
+                '<div class="d-flex align-items-center gap-2 small flex-wrap">' +
+                    '<span class="badge bg-white text-muted border">Ord: <strong class="text-dark">' + line.quantityOrdered + '</strong></span>' +
+                    '<span class="badge bg-white text-muted border">Prev: <strong class="text-dark">' + line.quantityPreviouslyReceived + '</strong></span>' +
+                    '<span class="badge ' + dueBadgeClass + '">Due: <strong>' + line.quantityDue + '</strong></span>' +
+                '</div>' +
+                '<div class="form-check form-switch m-0">' +
+                    '<input class="form-check-input" type="checkbox" role="switch" id="insp_card_isDescriptionMatched_' + idx + '" ' +
+                        (line.isDescriptionMatched ? 'checked' : '') +
+                        ' onchange="updateLineField(' + idx + ', \'isDescriptionMatched\', this.checked)">' +
+                    '<label class="form-check-label small fw-bold" for="insp_card_isDescriptionMatched_' + idx + '">Matches Item</label>' +
+                '</div>' +
+            '</div>' +
+
+            // Qty Rec'd Stepper
+            '<div class="d-flex align-items-center gap-2 mb-3">' +
+                '<label class="small fw-bold text-muted mb-0">Qty Rec\'d:</label>' +
+                '<div class="input-group input-group-sm insp-qty-stepper" style="max-width: 160px;">' +
+                    '<button class="btn btn-outline-secondary" type="button" onclick="stepQty(' + idx + ', -1)" title="Decrease">-</button>' +
+                    '<input type="number" min="0" step="any" class="form-control text-center fw-bold font-monospace" ' +
+                        'id="insp_card_quantityReceivedThisShipment_' + idx + '" ' +
+                        'value="' + (line.quantityReceivedThisShipment || 0) + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'quantityReceivedThisShipment\', parseFloat(this.value) || 0)">' +
+                    '<button class="btn btn-outline-secondary" type="button" onclick="stepQty(' + idx + ', 1)" title="Increase">+</button>' +
+                '</div>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary fw-semibold px-2" onclick="fillDueQty(' + idx + ', ' + line.quantityDue + ')" title="Receive all due (' + line.quantityDue + ')">' +
+                    'All (' + line.quantityDue + ')' +
+                '</button>' +
+            '</div>' +
+
+            // Traceability Fields Grid (Heat #, Storage Bin, Serial #, Notes)
+            '<div class="row g-2 mb-1">' +
+                // Heat #
+                '<div class="col-12 col-sm-6">' +
+                    '<label class="form-label small text-muted mb-0 fw-semibold" style="font-size: 11px;">Heat # (HT#)</label>' +
+                    '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_heat_numbers" ' +
+                        'id="insp_card_heatNumber_' + idx + '" ' +
+                        'placeholder="Enter or tap HT#" value="' + escapeHtml(line.heatNumber || '') + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'heatNumber\', this.value)" />' +
+                    htChipsHtml +
+                '</div>' +
+                // Bin Location
+                '<div class="col-12 col-sm-6">' +
+                    '<label class="form-label small text-muted mb-0 fw-semibold" style="font-size: 11px;">Storage Location (Bin)</label>' +
+                    '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_bin_locations" ' +
+                        'id="insp_card_storageLocation_' + idx + '" ' +
+                        'placeholder="e.g. 4 D 2 2" value="' + escapeHtml(line.storageLocation || '') + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'storageLocation\', this.value)" />' +
+                    binChipsHtml +
+                '</div>' +
+                // Serial / Tag #
+                '<div class="col-12 col-sm-6">' +
+                    '<label class="form-label small text-muted mb-0 fw-semibold" style="font-size: 11px;">Serial / Tag #</label>' +
+                    '<input type="text" class="form-control form-control-sm font-monospace" list="dl_all_serial_numbers" ' +
+                        'id="insp_card_serialNumber_' + idx + '" ' +
+                        'placeholder="Serial / Tag #" value="' + escapeHtml(line.serialNumber || '') + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'serialNumber\', this.value)" />' +
+                    serialChipsHtml +
+                '</div>' +
+                // Line Notes
+                '<div class="col-12 col-sm-6">' +
+                    '<label class="form-label small text-muted mb-0 fw-semibold" style="font-size: 11px;">Line Notes / Discrepancy</label>' +
+                    '<input type="text" class="form-control form-control-sm" ' +
+                        'id="insp_card_notes_' + idx + '" ' +
+                        'placeholder="Line notes..." value="' + escapeHtml(line.notes || '') + '" ' +
+                        'oninput="updateLineField(' + idx + ', \'notes\', this.value)" />' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function filterInspectionTable() {
+        renderInspectionLines();
+    }
+
+    function stepQty(idx, delta) {
+        if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
+        var current = parseFloat(window.currentInspectionLines[idx].quantityReceivedThisShipment) || 0;
+        var next = Math.max(0, current + delta);
+        updateLineField(idx, 'quantityReceivedThisShipment', next);
+    }
+
+    function updateLineField(idx, field, value) {
+        if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
+        window.currentInspectionLines[idx][field] = value;
+
+        // Synchronize Table Input (if present)
+        var tableEl = document.getElementById('insp_line_' + field + '_' + idx);
+        if (tableEl) {
+            if (tableEl.type === 'checkbox') {
+                tableEl.checked = !!value;
+            } else if (tableEl.value !== String(value)) {
+                tableEl.value = value;
+            }
+        }
+
+        // Synchronize Mobile Card Input (if present)
+        var cardEl = document.getElementById('insp_card_' + field + '_' + idx);
+        if (cardEl) {
+            if (cardEl.type === 'checkbox') {
+                cardEl.checked = !!value;
+            } else if (cardEl.value !== String(value)) {
+                cardEl.value = value;
+            }
+        }
+
+        // Toggle Visual Accent on Card Box
+        if (field === 'isDescriptionMatched') {
+            var cardBox = document.getElementById('insp_card_box_' + idx);
+            if (cardBox) {
+                if (value) cardBox.classList.add('is-matched');
+                else cardBox.classList.remove('is-matched');
+            }
+        }
+
+        if (field === 'quantityReceivedThisShipment') {
+            updateSummaryMetrics();
+        }
+
+        triggerDebouncedSave();
+    }
+
+    function autofillField(idx, field, value) {
+        if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
+        updateLineField(idx, field, value);
+
+        var tableEl = document.getElementById('insp_line_' + field + '_' + idx);
+        if (tableEl) {
+            tableEl.classList.add('bg-success-subtle');
+            setTimeout(function() { tableEl.classList.remove('bg-success-subtle'); }, 600);
+        }
+
+        var cardEl = document.getElementById('insp_card_' + field + '_' + idx);
+        if (cardEl) {
+            cardEl.classList.add('bg-success-subtle');
+            setTimeout(function() { cardEl.classList.remove('bg-success-subtle'); }, 600);
+        }
+    }
+
+    function fillDueQty(idx, qty) {
+        if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
+        var fillVal = qty !== undefined && qty !== null ? qty : (window.currentInspectionLines[idx].quantityDue || 0);
+
+        updateLineField(idx, 'quantityReceivedThisShipment', fillVal);
+        updateLineField(idx, 'isDescriptionMatched', true);
+
+        var tableQtyEl = document.getElementById('insp_line_quantityReceivedThisShipment_' + idx);
+        if (tableQtyEl) {
+            tableQtyEl.classList.add('bg-primary-subtle');
+            setTimeout(function() { tableQtyEl.classList.remove('bg-primary-subtle'); }, 600);
+        }
+
+        var cardQtyEl = document.getElementById('insp_card_quantityReceivedThisShipment_' + idx);
+        if (cardQtyEl) {
+            cardQtyEl.classList.add('bg-primary-subtle');
+            setTimeout(function() { cardQtyEl.classList.remove('bg-primary-subtle'); }, 600);
+        }
+    }
+
+    function addAdHocInspectionLine() {
+        var staging = document.getElementById('inspStaging')?.innerText?.replace('📍 ', '').trim() || 'Walkway';
+        var newLine = {
+            id: 0,
+            receivingLogEntryId: window.currentInspectionEntryId,
+            jpKey: document.getElementById('inspModalJpKey')?.innerText || '',
+            poNumber: document.getElementById('inspModalPo')?.innerText || '',
+            poLineNumber: 'EXTRA-' + (window.currentInspectionLines.length + 1),
+            bomId: '',
+            itemDescription: 'Extra Unlisted Material',
+            quantityOrdered: 0,
+            quantityPreviouslyReceived: 0,
+            quantityDue: 0,
+            quantityReceivedThisShipment: 1,
+            unitOfMeasure: 'EA',
+            isDescriptionMatched: true,
+            heatNumber: '',
+            serialNumber: '',
+            storageLocation: staging,
+            notes: 'Unlisted on VISTA BOM',
+            isAdHoc: true
+        };
+
+        window.currentInspectionLines.push(newLine);
+        renderInspectionLines();
+        triggerDebouncedSave();
+    }
+
+    function removeAdHocLine(idx) {
+        if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
+        window.currentInspectionLines.splice(idx, 1);
+        renderInspectionLines();
+        triggerDebouncedSave();
+    }
+
+    function updateSummaryMetrics() {
+        if (!window.currentInspectionLines) return;
+        var totalLines = window.currentInspectionLines.length;
+        var countedLines = 0;
+        var totalPieces = 0;
+
+        window.currentInspectionLines.forEach(function(l) {
+            var rec = parseFloat(l.quantityReceivedThisShipment) || 0;
+            if (rec > 0) countedLines++;
+            totalPieces += rec;
+        });
+
+        var elTotal = document.getElementById('inspTotalLinesCount');
+        var elCounted = document.getElementById('inspCountedLinesCount');
+        var elPieces = document.getElementById('inspTotalPiecesCount');
+
+        if (elTotal) elTotal.innerText = totalLines;
+        if (elCounted) elCounted.innerText = countedLines;
+        if (elPieces) elPieces.innerText = totalPieces.toLocaleString();
+    }
+
+    function triggerDebouncedSave() {
+        var badge = document.getElementById('inspSaveBadge');
+        if (badge) {
+            badge.className = 'badge bg-warning-subtle text-dark border px-2 py-1 small';
+            badge.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Saving draft...';
+        }
+
+        // Local mirror save
+        try {
+            var draftPayload = {
+                lines: window.currentInspectionLines,
+                notes: document.getElementById('inspOverallNotes')?.value || '',
+                receiver: document.getElementById('inspReceiverName')?.value || '',
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('alstar_insp_draft_' + window.currentInspectionEntryId, JSON.stringify(draftPayload));
+        } catch (e) { }
+
+        clearTimeout(window.saveTimeout);
+        window.saveTimeout = setTimeout(function() {
+            saveDraftToServer();
+        }, 1200);
+    }
+
+    function saveDraftToServer(callback) {
+        if (!window.currentInspectionEntryId) return;
+
+        var payload = {
+            entryId: window.currentInspectionEntryId,
+            receiverName: document.getElementById('inspReceiverName')?.value || '',
+            inspectionNotes: document.getElementById('inspOverallNotes')?.value || '',
+            lines: window.currentInspectionLines
+        };
+
+        fetch('/ReceivingLog?handler=SaveInspectionDraft', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': getAntiForgeryToken()
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function(data) {
+            var badge = document.getElementById('inspSaveBadge');
+            if (badge) {
+                badge.className = 'badge bg-success-subtle text-success border px-2 py-1 small';
+                badge.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Auto-saved at ' + (data.savedAt || new Date().toLocaleTimeString());
+            }
+            if (callback) callback();
+        })
+        .catch(function(err) {
+            console.warn('Draft save error:', err);
+            var badge = document.getElementById('inspSaveBadge');
+            if (badge) {
+                badge.className = 'badge bg-secondary-subtle text-dark border px-2 py-1 small';
+                badge.innerHTML = '<i class="bi bi-hdd me-1"></i> Saved locally';
+            }
+            if (callback) callback();
+        });
+    }
+
+    function closeInspectionModalWithSave() {
+        saveDraftToServer(function() {
+            if (window.inspectionModalInstance) {
+                window.inspectionModalInstance.hide();
+            }
+        });
+        setTimeout(function() {
+            if (window.inspectionModalInstance) {
+                window.inspectionModalInstance.hide();
+            }
+        }, 400);
+    }
+
+    function submitInspectionForAdmin() {
+        var inspector = (document.getElementById('inspReceiverName')?.value || '').trim();
+        if (!inspector) {
+            alert('Please specify the Inspector / Receiver name before submitting.');
+            document.getElementById('inspReceiverName')?.focus();
+            return;
+        }
+
+        var totalRec = window.currentInspectionLines.reduce(function(sum, l) {
+            return sum + (parseFloat(l.quantityReceivedThisShipment) || 0);
+        }, 0);
+
+        if (totalRec <= 0) {
+            if (!confirm('No items have a received quantity greater than 0. Do you want to submit this inspection report as empty / non-received?')) {
+                return;
+            }
+        }
+
+        var payload = {
+            entryId: window.currentInspectionEntryId,
+            receiverName: inspector,
+            inspectionNotes: document.getElementById('inspOverallNotes')?.value || '',
+            lines: window.currentInspectionLines
+        };
+
+        var submitBtn = event ? event.target.closest('button') : null;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Submitting to Admin...';
+        }
+
+        fetch('/ReceivingLog?handler=SubmitInspection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': getAntiForgeryToken()
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function(data) {
+            try {
+                localStorage.removeItem('alstar_insp_draft_' + window.currentInspectionEntryId);
+            } catch (e) { }
+
+            if (data.redirectUrl) {
+                window.location.href = data.redirectUrl;
+            } else {
+                window.location.reload();
+            }
+        })
+        .catch(function(err) {
+            console.error(err);
+            alert('Error submitting inspection report. Please check server logs.');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-send-check me-1"></i> Submit Inspection for Admin Approval';
+            }
+        });
+    }
+
+    // =============================================================
+    // MATERIALS ADMIN AUDIT & APPROVAL WORKFLOW
+    // =============================================================
+    function openAdminReviewModal(entryId, jpKey, poNumber, vendorName, jobNumber) {
+        var modalEl = document.getElementById('adminInspectionReviewModal');
+        if (!window.adminReviewModalInstance) {
+            window.adminReviewModalInstance = new bootstrap.Modal(modalEl);
+        }
+
+        document.getElementById('adminRevJpKey').innerText = jpKey || '--';
+        document.getElementById('adminRevPo').innerText = poNumber || '--';
+        document.getElementById('adminRevJob').innerText = jobNumber || '251078';
+        document.getElementById('adminRevVendor').innerText = vendorName || '--';
+        document.getElementById('adminApproveEntryId').value = entryId;
+
+        var tbody = document.getElementById('adminRevLinesTbody');
+        var cardsList = document.getElementById('adminRevLinesCardsList');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">' +
+                '<div class="spinner-border spinner-border-sm text-warning me-2"></div>Loading inspected line items &amp; traceability data...</td></tr>';
+        }
+        if (cardsList) {
+            cardsList.innerHTML = '<div class="text-center py-4 text-muted">' +
+                '<div class="spinner-border spinner-border-sm text-warning me-2"></div>Loading inspected line items &amp; traceability data...</div>';
+        }
+
+        window.adminReviewModalInstance.show();
+
+        fetch('/ReceivingLog?handler=InspectionData&entryId=' + entryId)
+            .then(function(res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
+            .then(function(data) {
+                document.getElementById('adminRevInspector').innerText = data.receiverName || 'Receiver';
+                document.getElementById('adminRevArrival').innerText = data.arrivalDateTime || '--';
+                document.getElementById('adminRevWindow').innerText = (data.receiveStartTime || '--') + ' to ' + (data.receiveEndTime || '--');
+                document.getElementById('adminRevStatus').innerText = data.status || 'Pending Admin Approval';
+                document.getElementById('adminRevNotesDisplay').innerText = data.inspectionNotes || 'No specific discrepancies logged.';
+
+                var lines = data.lines || [];
+                if (lines.length === 0) {
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No line item details found for this shipment.</td></tr>';
+                    if (cardsList) cardsList.innerHTML = '<div class="text-center py-4 text-muted">No line item details found for this shipment.</div>';
+                    return;
+                }
+
+                var linesTableHtml = '';
+                var linesCardsHtml = '';
+
+                lines.forEach(function(l) {
+                    var matchIcon = l.isDescriptionMatched
+                        ? '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>Matched</span>'
+                        : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-exclamation-triangle me-1"></i>Discrepancy</span>';
+
+                    var recBadge = l.quantityReceivedThisShipment > 0
+                        ? '<strong class="text-success font-monospace fs-6">' + l.quantityReceivedThisShipment + '</strong>'
+                        : '<span class="text-muted font-monospace">0</span>';
+
+                    // Table Row (Desktop)
+                    linesTableHtml += '<tr>' +
+                        '<td><span class="fw-bold font-monospace">' + escapeHtml(l.poLineNumber || '--') + '</span><div class="text-muted font-monospace" style="font-size:10.5px;">' + escapeHtml(l.bomId || '--') + '</div></td>' +
+                        '<td><span class="fw-semibold">' + escapeHtml(l.itemDescription || '') + '</span></td>' +
+                        '<td style="text-align: center;">' + l.quantityOrdered + ' / ' + l.quantityPreviouslyReceived + ' / ' + recBadge + ' ' + escapeHtml(l.unitOfMeasure || 'EA') + '</td>' +
+                        '<td style="text-align: center;">' + matchIcon + '</td>' +
+                        '<td><span class="badge bg-light text-dark border font-monospace">' + (escapeHtml(l.heatNumber) || '--') + '</span></td>' +
+                        '<td><span class="badge bg-light text-dark border font-monospace">' + (escapeHtml(l.serialNumber) || '--') + '</span></td>' +
+                        '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">📍 ' + (escapeHtml(l.storageLocation) || 'Walkway') + '</span></td>' +
+                        '<td><span class="small text-muted">' + (escapeHtml(l.notes) || '--') + '</span></td>' +
+                    '</tr>';
+
+                    // Card Layout (Mobile)
+                    linesCardsHtml += '<div class="card p-3 mb-2 shadow-sm border">' +
+                        '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                            '<div class="d-flex align-items-center gap-1">' +
+                                '<span class="badge bg-secondary font-monospace">Line ' + escapeHtml(l.poLineNumber || '--') + '</span>' +
+                                '<span class="badge bg-light text-muted border font-monospace">' + escapeHtml(l.bomId || '--') + '</span>' +
+                            '</div>' +
+                            matchIcon +
+                        '</div>' +
+                        '<div class="fw-bold text-dark small mb-2">' + escapeHtml(l.itemDescription || '') + '</div>' +
+                        '<div class="row g-2 small bg-light p-2 rounded mb-2 text-center">' +
+                            '<div class="col-4 border-end"><strong>Ord:</strong> ' + l.quantityOrdered + '</div>' +
+                            '<div class="col-4 border-end"><strong>Prev:</strong> ' + l.quantityPreviouslyReceived + '</div>' +
+                            '<div class="col-4"><strong>Rec\'d:</strong> ' + recBadge + ' ' + escapeHtml(l.unitOfMeasure || 'EA') + '</div>' +
+                        '</div>' +
+                        '<div class="d-flex flex-wrap gap-1 align-items-center font-monospace small mb-1">' +
+                            '<span class="badge bg-light text-dark border">HT: ' + (escapeHtml(l.heatNumber) || 'None') + '</span>' +
+                            (l.serialNumber ? '<span class="badge bg-light text-dark border">SN: ' + escapeHtml(l.serialNumber) + '</span>' : '') +
+                            '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-auto">📍 ' + (escapeHtml(l.storageLocation) || 'Walkway') + '</span>' +
+                        '</div>' +
+                        (l.notes ? '<div class="small text-muted mt-1 fst-italic"><i class="bi bi-chat-left-text me-1"></i>' + escapeHtml(l.notes) + '</div>' : '') +
+                    '</div>';
+                });
+
+                if (tbody) tbody.innerHTML = linesTableHtml;
+                if (cardsList) cardsList.innerHTML = linesCardsHtml;
+            })
+            .catch(function(err) {
+                console.error(err);
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>Failed to load audit data.</td></tr>';
+                }
+                if (cardsList) {
+                    cardsList.innerHTML = '<div class="text-center py-4 text-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>Failed to load audit data.</div>';
+                }
+            });
+    }
+
+    function submitAdminApproval() {
+        var form = document.getElementById('adminApproveForm');
+        if (form) {
+            form.submit();
+        }
+    }
+
+    function returnInspectionForRevision() {
+        var entryId = document.getElementById('adminApproveEntryId')?.value;
+        if (!entryId) return;
+
+        var reason = prompt('Please enter the reason for returning this shipment for revision (e.g. Missing Heat # on line 2):');
+        if (reason === null) return; // User pressed Cancel
+        if (!reason.trim()) {
+            alert('A return reason is required.');
+            return;
+        }
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/ReceivingLog?handler=ReturnInspection';
+
+        var idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'entryId';
+        idInput.value = entryId;
+        form.appendChild(idInput);
+
+        var reasonInput = document.createElement('input');
+        reasonInput.type = 'hidden';
+        reasonInput.name = 'returnReason';
+        reasonInput.value = reason;
+        form.appendChild(reasonInput);
+
+        var token = getAntiForgeryToken();
+        if (token) {
+            var tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '__RequestVerificationToken';
+            tokenInput.value = token;
+            form.appendChild(tokenInput);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
     }
 </script>
 }

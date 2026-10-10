@@ -42,11 +42,8 @@
         <button class="hs-view-tab active" data-view="all" onclick="selectViewTab(this, 'all')">
             <i class="bi bi-table"></i> All materials <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@Model.TotalItems</span>
         </button>
-        <button class="hs-view-tab" data-view="241143" onclick="selectViewTab(this, '241143')">
-            Job 241143 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "241143"))</span>
-        </button>
-        <button class="hs-view-tab" data-view="251024" onclick="selectViewTab(this, '251024')">
-            Job 251024 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "251024"))</span>
+        <button class="hs-view-tab" data-view="251078" onclick="selectViewTab(this, '251078')">
+            Job 251078 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "251078" || m.JobNumber == "251078C"))</span>
         </button>
         <button class="hs-add-view-btn" type="button"><i class="bi bi-plus"></i> Add view</button>
     </div>
@@ -416,7 +413,7 @@
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted">Job #</label>
-                            <input type="text" class="form-control font-monospace" placeholder="e.g. 241143" required>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. 251078" required>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted">BOMID</label>
@@ -426,11 +423,11 @@
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted">PO #</label>
-                            <input type="text" class="form-control font-monospace" placeholder="e.g. 241143C0446" required>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. 251078C0430" required>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted">Receiver ID</label>
-                            <input type="text" class="form-control font-monospace" placeholder="e.g. C0446">
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. C0430">
                         </div>
                     </div>
                     <div class="mb-3">
@@ -627,7 +624,7 @@
 
             // View check
             let matchesView = true;
-            if (activeView !== "all" && job !== activeView) {
+            if (activeView !== "all" && job !== activeView && !job.startsWith(activeView)) {
                 matchesView = false;
             }
 

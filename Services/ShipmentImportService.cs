@@ -34,6 +34,7 @@ public class ShipmentImportService
         var expFile = Path.Combine(_importsDirectory, "MML - Expected Receiving.csv");
         var recLogFile = Path.Combine(_importsDirectory, "MML - RecLog2.csv");
         var activeJobsFile = Path.Combine(_importsDirectory, "MTS - Active Jobs.csv");
+        var unrecFile = Path.Combine(_importsDirectory, "251078 MMT - Unreceived Report.csv");
 
         var clientLookup = LoadActiveJobs(activeJobsFile);
         var recLogLookup = LoadRecLogLookup(recLogFile);
@@ -42,6 +43,9 @@ public class ShipmentImportService
         {
             orders = ParseExpectedReceivingCsv(expFile, recLogLookup, clientLookup);
         }
+
+        // Merge unreceived report items specifically for Job 251078
+        MergeUnreceivedReport(orders, unrecFile, clientLookup);
 
         if (orders.Count == 0)
         {
@@ -98,6 +102,9 @@ public class ShipmentImportService
                         var po = cols[poIdx].Trim();
                         if (string.IsNullOrEmpty(job) || string.IsNullOrEmpty(po)) continue;
 
+                        // ONLY reflect 251078 job data
+                        if (!job.StartsWith("251078", StringComparison.OrdinalIgnoreCase)) continue;
+
                         var vendor = vendorIdx >= 0 && cols.Count > vendorIdx ? cols[vendorIdx].Trim() : "";
                         var pl = plIdx >= 0 && cols.Count > plIdx ? cols[plIdx].Trim() : "";
                         var loadType = loadTypeIdx >= 0 && cols.Count > loadTypeIdx ? cols[loadTypeIdx].Trim() : "";
@@ -127,6 +134,7 @@ public class ShipmentImportService
 
                         var client = !string.IsNullOrEmpty(clientVal) ? clientVal : "";
                         if (string.IsNullOrEmpty(client) && clientLookup.TryGetValue(job, out var c)) client = c;
+                        if (string.IsNullOrEmpty(client)) client = "CNRL";
 
                         var staging = AssignStagingLocation(loadType);
 
@@ -184,65 +192,99 @@ public class ShipmentImportService
             catch { }
         }
 
-        // Add 3 pending admin verification test entries for client-supplied / unscheduled arrivals
+        // 4 Active Shipments for CNRL Job 251078 across each stage of physical receiving pipeline
         entries.Add(new ReceivingLogEntry
         {
             Id = idCounter++,
-            JpKey = "UNKNOWN-0091",
-            JobNumber = null, // Client supplied - job unknown
-            PoNumber = "0091",
-            VendorName = "Emerson Automation Solutions",
-            PackingSlipNumber = "EM-99201",
-            BolNumber = "BOL-EM-8821",
+            JpKey = "251078C0435",
+            JobNumber = "251078",
+            PoNumber = "0435",
+            VendorName = "Comco Pipe and Supply Company",
+            PackingSlipNumber = "PS-1368291",
+            BolNumber = "BOL-CP-9941",
             PalletCount = 1,
             CrateCount = 1,
-            BoxCount = 0,
-            LoadType = "Instrumentation",
-            StagingLocation = "Quarantine / Inspection Pad",
-            ArrivalDateTime = new DateTime(2026, 10, 5, 14, 30, 0),
-            Status = "Pending Admin Verification",
-            IsAdminVerified = false,
-            Notes = "Client-supplied Fisher control valves. Truck driver had no job# on BOL. Staged on Quarantine pad for inspection."
-        });
-
-        entries.Add(new ReceivingLogEntry
-        {
-            Id = idCounter++,
-            JpKey = "UNKNOWN-0104",
-            JobNumber = null,
-            PoNumber = "0104",
-            VendorName = "Calgary Fasteners",
-            PackingSlipNumber = "CF-40912",
-            BolNumber = "BOL-CF-3301",
-            PalletCount = 2,
-            CrateCount = 0,
-            BoxCount = 4,
-            LoadType = "SNG / Bolt-Up",
+            BoxCount = 2,
+            LoadType = "Flanges & Fittings",
             StagingLocation = "Walkway",
-            ArrivalDateTime = new DateTime(2026, 10, 5, 15, 10, 0),
-            Status = "Pending Admin Verification",
-            IsAdminVerified = false,
-            Notes = "Urgent B7 stud bolts arrived directly from courier. Needs Job# assignment from PC."
+            ArrivalDateTime = new DateTime(2026, 10, 5, 8, 30, 0),
+            Status = "Landed - Pending Inspection",
+            IsAdminVerified = true,
+            ClientName = "CNRL",
+            ProjectManager = "Ryan Kallis",
+            Notes = "Base supports, reducers, tees & plugs landed in yard. Ready for physical inspection."
         });
 
         entries.Add(new ReceivingLogEntry
         {
             Id = idCounter++,
-            JpKey = "UNKNOWN-0312",
-            JobNumber = null,
-            PoNumber = "0312",
-            VendorName = "Swagelok Central & Northern AB",
-            PackingSlipNumber = "SW-55102",
-            BolNumber = "BOL-SW-1109",
+            JpKey = "251078C0438",
+            JobNumber = "251078",
+            PoNumber = "0438",
+            VendorName = "Precision Fabrication (2020) Inc",
+            PackingSlipNumber = "PS-PF-4412",
+            BolNumber = "BOL-PF-8831",
             PalletCount = 1,
-            CrateCount = 0,
-            BoxCount = 3,
+            CrateCount = 2,
+            BoxCount = 0,
+            LoadType = "Supports",
+            StagingLocation = "Bay 2 - Fabrication Staging",
+            ArrivalDateTime = new DateTime(2026, 10, 5, 9, 0, 0),
+            Status = "Inspecting",
+            ReceiverName = "Kris",
+            ReceiveStartTime = new DateTime(2026, 10, 10, 9, 15, 0),
+            IsAdminVerified = true,
+            ClientName = "CNRL",
+            ProjectManager = "Ryan Kallis",
+            Notes = "6\" pipe shoes. Physical inspection currently in progress by Kris."
+        });
+
+        entries.Add(new ReceivingLogEntry
+        {
+            Id = idCounter++,
+            JpKey = "251078C0433",
+            JobNumber = "251078",
+            PoNumber = "0433",
+            VendorName = "Comco Pipe and Supply Company",
+            PackingSlipNumber = "PS-1359102",
+            BolNumber = "BOL-CP-8812",
+            PalletCount = 2,
+            CrateCount = 1,
+            BoxCount = 1,
             LoadType = "Valves",
             StagingLocation = "Bay 1 - Receiving Floor",
-            ArrivalDateTime = new DateTime(2026, 10, 6, 8, 15, 0),
-            Status = "Pending Admin Verification",
-            IsAdminVerified = false,
-            Notes = "60-series ball valves and tubing fittings delivered this morning. Awaiting PO confirmation from SCM."
+            ArrivalDateTime = new DateTime(2026, 10, 6, 10, 15, 0),
+            Status = "Landed - Pending Inspection",
+            IsAdminVerified = true,
+            ClientName = "CNRL",
+            ProjectManager = "Ryan Kallis",
+            Notes = "Gate valves (1500# and 800# SW x TE). Includes 1 fully received line to test hide/show."
+        });
+
+        entries.Add(new ReceivingLogEntry
+        {
+            Id = idCounter++,
+            JpKey = "251078C0270",
+            JobNumber = "251078",
+            PoNumber = "0270",
+            VendorName = "Calgary Fasteners",
+            PackingSlipNumber = "260904-02",
+            BolNumber = "BOL-CF-2609",
+            PalletCount = 1,
+            CrateCount = 0,
+            BoxCount = 4,
+            LoadType = "Studs, Nuts, Gaskets (SNG / Bolt-Up)",
+            StagingLocation = "Walkway",
+            ArrivalDateTime = new DateTime(2026, 10, 9, 11, 30, 0),
+            Status = "Pending Admin Approval",
+            ReceiverName = "Brandon",
+            ReceiveStartTime = new DateTime(2026, 10, 9, 14, 0, 0),
+            ReceiveEndTime = new DateTime(2026, 10, 9, 15, 15, 0),
+            IsAdminVerified = true,
+            ClientName = "CNRL",
+            ProjectManager = "Ryan Kallis",
+            InspectionNotes = "B7 stud bolts and spiral wound gaskets inspected and counted. Good condition, MTRs attached. Staged in Bin 4D22.",
+            Notes = "Physical receiving inspection complete by Brandon. Awaiting Materials Admin review & approval into inventory."
         });
 
         return entries;
@@ -264,6 +306,10 @@ public class ShipmentImportService
     private Dictionary<string, string> LoadActiveJobs(string filePath)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Default mapping for Job 251078
+        dict["251078"] = "CNRL";
+        dict["251078C"] = "CNRL";
+
         if (!File.Exists(filePath)) return dict;
 
         try
@@ -276,6 +322,9 @@ public class ShipmentImportService
                 if (record.Count >= 2 && !string.IsNullOrWhiteSpace(record[0]))
                 {
                     var job = record[0].Trim();
+                    // ONLY reflect 251078 job data
+                    if (!job.StartsWith("251078", StringComparison.OrdinalIgnoreCase)) continue;
+
                     var client = record.Count >= 3 && !string.IsNullOrWhiteSpace(record[2]) ? record[2].Trim() : record[1].Trim();
                     dict[job] = client;
                     dict[job.TrimEnd('C', 'c')] = client;
@@ -321,6 +370,9 @@ public class ShipmentImportService
                 var job = cols[jobIdx].Trim();
                 var po = cols[poIdx].Trim();
                 if (string.IsNullOrEmpty(job) || string.IsNullOrEmpty(po)) continue;
+
+                // ONLY reflect 251078 job data
+                if (!job.StartsWith("251078", StringComparison.OrdinalIgnoreCase)) continue;
 
                 var entry = new RecLogEntry
                 {
@@ -396,6 +448,9 @@ public class ShipmentImportService
             var rawPo = cols[poIdx].Trim();
             if (string.IsNullOrEmpty(job) || string.IsNullOrEmpty(rawPo)) continue;
 
+            // ONLY reflect 251078 job data
+            if (!job.StartsWith("251078", StringComparison.OrdinalIgnoreCase)) continue;
+
             var vendor = vendorIdx >= 0 && cols.Count > vendorIdx ? cols[vendorIdx].Trim() : "";
             var packingSlip = plIdx >= 0 && cols.Count > plIdx ? cols[plIdx].Trim() : "";
             var expDateStr = expIdx >= 0 && cols.Count > expIdx ? cols[expIdx].Trim() : "";
@@ -466,10 +521,12 @@ public class ShipmentImportService
 
             // Exclude structural steel as it is handled by another team
             bool isStructural = IsStructuralSteel(loadType, vendor, notes);
+            if (isStructural) continue;
 
             var clientName = "";
             if (clientLookup.TryGetValue(job, out var cName)) clientName = cName;
             else if (clientLookup.TryGetValue(job.TrimEnd('C', 'c'), out var cName2)) clientName = cName2;
+            if (string.IsNullOrEmpty(clientName)) clientName = "CNRL";
 
             var finalPackingSlip = allPackingSlips.Count > 0 ? string.Join(", ", allPackingSlips) : packingSlip;
 
@@ -663,23 +720,700 @@ public class ShipmentImportService
         }
     }
 
+    private void MergeUnreceivedReport(
+        List<ExpectedOrder> orders,
+        string unrecFile,
+        Dictionary<string, string> clientLookup)
+    {
+        if (!File.Exists(unrecFile)) return;
+
+        try
+        {
+            using var reader = new StreamReader(unrecFile, Encoding.UTF8);
+            var recordsEnum = ReadCsvRecords(reader).GetEnumerator();
+            int poIdx = -1, descIdx = -1, bomIdx = -1, vendorIdx = -1, expIdx = -1;
+
+            while (recordsEnum.MoveNext())
+            {
+                var cols = recordsEnum.Current;
+                int pIdx = cols.FindIndex(h => CleanHeader(h).Equals("PO", StringComparison.OrdinalIgnoreCase));
+                int dIdx = cols.FindIndex(h => CleanHeader(h).Contains("Drafting BOM Description", StringComparison.OrdinalIgnoreCase));
+                if (pIdx >= 0 || dIdx >= 0)
+                {
+                    poIdx = pIdx;
+                    descIdx = dIdx;
+                    bomIdx = cols.FindIndex(h => CleanHeader(h).Equals("BOM ID", StringComparison.OrdinalIgnoreCase));
+                    vendorIdx = cols.FindIndex(h => CleanHeader(h).Equals("Supplier", StringComparison.OrdinalIgnoreCase) || CleanHeader(h).Equals("Vendor", StringComparison.OrdinalIgnoreCase));
+                    expIdx = cols.FindIndex(h => CleanHeader(h).Contains("Date Expected", StringComparison.OrdinalIgnoreCase));
+                    break;
+                }
+            }
+
+            if (poIdx < 0) return;
+
+            int nextId = orders.Count > 0 ? orders.Max(o => o.Id) + 1 : 1;
+
+            while (recordsEnum.MoveNext())
+            {
+                var cols = recordsEnum.Current;
+                if (cols.Count <= poIdx) continue;
+
+                var poRaw = cols[poIdx].Trim();
+                if (string.IsNullOrEmpty(poRaw)) continue;
+
+                // ONLY reflect 251078 job data
+                if (!poRaw.StartsWith("251078", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var desc = descIdx >= 0 && cols.Count > descIdx ? cols[descIdx].Trim() : "";
+                var supplier = vendorIdx >= 0 && cols.Count > vendorIdx ? cols[vendorIdx].Trim() : "";
+                var expDateStr = expIdx >= 0 && cols.Count > expIdx ? cols[expIdx].Trim() : "";
+                var expDate = ParseDate(expDateStr);
+
+                string job = "251078C";
+                string poSuffix = poRaw;
+                if (poRaw.StartsWith("251078C", StringComparison.OrdinalIgnoreCase) && poRaw.Length > 7)
+                {
+                    poSuffix = poRaw.Substring(7);
+                }
+                else if (poRaw.StartsWith("251078", StringComparison.OrdinalIgnoreCase) && poRaw.Length > 6)
+                {
+                    poSuffix = poRaw.Substring(6).TrimStart('C', 'c');
+                }
+
+                // Check for existing order match
+                var existing = orders.FirstOrDefault(o =>
+                    o.JobNumber.StartsWith("251078", StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(o.PoNumber, poSuffix, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(o.PoNumber, poSuffix.TrimStart('0'), StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(o.PoNumber.TrimStart('0'), poSuffix.TrimStart('0'), StringComparison.OrdinalIgnoreCase)));
+
+                if (existing != null)
+                {
+                    if (expDate.HasValue && (existing.ExpectedDate == null || expDate.Value.Year >= 2026 || poSuffix == "0435"))
+                    {
+                        existing.ExpectedDate = expDate.Value;
+                        if (existing.ExpectedDate.Value.Date < new DateTime(2026, 10, 5) && !existing.HasLandedInYard)
+                        {
+                            existing.YardStatus = "Past Due";
+                        }
+                    }
+                    if (string.IsNullOrWhiteSpace(existing.VendorName) && !string.IsNullOrWhiteSpace(supplier))
+                    {
+                        existing.VendorName = supplier;
+                    }
+                }
+                else
+                {
+                    var loadType = StandardizeLoadType("", desc, supplier);
+                    if (IsStructuralSteel(loadType, supplier, desc)) continue;
+
+                    DateTime todayRef = new DateTime(2026, 10, 5);
+                    string yardStatus = "In Transit";
+                    if (expDate.HasValue && expDate.Value.Date < todayRef)
+                    {
+                        yardStatus = "Past Due";
+                    }
+
+                    orders.Add(new ExpectedOrder
+                    {
+                        Id = nextId++,
+                        JobNumber = job,
+                        PoNumber = poSuffix,
+                        VendorName = !string.IsNullOrWhiteSpace(supplier) ? supplier : "Trans Am Piping Products Ltd",
+                        PackingSlipNumber = "",
+                        LoadType = loadType,
+                        ExpectedDate = expDate,
+                        HasLandedInYard = false,
+                        YardStatus = yardStatus,
+                        ReceivingStatus = "Not Received",
+                        ClientName = "CNRL",
+                        ShipmentNature = desc,
+                        Notes = $"Unreceived Report item: {desc}"
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
+    public List<MaterialItem> LoadMaterialItems()
+    {
+        var items = new List<MaterialItem>();
+        var invFile = Path.Combine(_importsDirectory, "CNRL - Inventory - 251078.csv");
+
+        if (File.Exists(invFile))
+        {
+            var vendorLookup = GetPoVendorLookup();
+            try
+            {
+                using var reader = new StreamReader(invFile, Encoding.UTF8);
+                var recordsEnum = ReadCsvRecords(reader).GetEnumerator();
+                if (recordsEnum.MoveNext())
+                {
+                    var headers = recordsEnum.Current;
+                    int typeIdx = headers.FindIndex(h => CleanHeader(h).Equals("Type", StringComparison.OrdinalIgnoreCase));
+                    int formIdx = headers.FindIndex(h => CleanHeader(h).Equals("Form", StringComparison.OrdinalIgnoreCase));
+                    int dateIdx = headers.FindIndex(h => CleanHeader(h).StartsWith("Date", StringComparison.OrdinalIgnoreCase));
+                    int poIdx = headers.FindIndex(h => CleanHeader(h).Equals("PO", StringComparison.OrdinalIgnoreCase));
+                    int catIdx = headers.FindIndex(h => CleanHeader(h).Equals("Category", StringComparison.OrdinalIgnoreCase));
+                    int subcatIdx = headers.FindIndex(h => CleanHeader(h).Equals("Subcategory", StringComparison.OrdinalIgnoreCase));
+                    int descIdx = headers.FindIndex(h => CleanHeader(h).Contains("Description", StringComparison.OrdinalIgnoreCase));
+                    int bomIdx = headers.FindIndex(h => CleanHeader(h).Equals("BOMID", StringComparison.OrdinalIgnoreCase));
+                    int qtyIdx = headers.FindIndex(h => CleanHeader(h).Equals("Qty", StringComparison.OrdinalIgnoreCase));
+                    int tagIdx = headers.FindIndex(h => CleanHeader(h).Contains("Tag", StringComparison.OrdinalIgnoreCase));
+                    int heatIdx = headers.FindIndex(h => CleanHeader(h).Contains("Heat", StringComparison.OrdinalIgnoreCase));
+                    int locIdx = headers.FindIndex(h => CleanHeader(h).Equals("Location", StringComparison.OrdinalIgnoreCase));
+                    int recIdx = headers.FindIndex(h => CleanHeader(h).Contains("Receiver") || CleanHeader(h).Contains("Kitter"));
+
+                    int idCounter = 1;
+                    while (recordsEnum.MoveNext())
+                    {
+                        var cols = recordsEnum.Current;
+                        if (typeIdx < 0 || cols.Count <= typeIdx) continue;
+
+                        var typeVal = cols[typeIdx].Trim();
+                        // Only import Received inventory (Type == "Rec")
+                        if (!typeVal.Equals("Rec", StringComparison.OrdinalIgnoreCase)) continue;
+
+                        var form = formIdx >= 0 && cols.Count > formIdx ? cols[formIdx].Trim() : "";
+                        var dateStr = dateIdx >= 0 && cols.Count > dateIdx ? cols[dateIdx].Trim() : "";
+                        var po = poIdx >= 0 && cols.Count > poIdx ? cols[poIdx].Trim() : "";
+                        var cat = catIdx >= 0 && cols.Count > catIdx ? cols[catIdx].Trim() : "";
+                        var subcat = subcatIdx >= 0 && cols.Count > subcatIdx ? cols[subcatIdx].Trim() : "";
+                        var desc = descIdx >= 0 && cols.Count > descIdx ? cols[descIdx].Trim() : "";
+                        var bomId = bomIdx >= 0 && cols.Count > bomIdx ? cols[bomIdx].Trim() : "";
+                        var qtyStr = qtyIdx >= 0 && cols.Count > qtyIdx ? cols[qtyIdx].Trim() : "";
+                        var heat = heatIdx >= 0 && cols.Count > heatIdx ? cols[heatIdx].Trim() : "";
+                        var loc = locIdx >= 0 && cols.Count > locIdx ? cols[locIdx].Trim() : "";
+                        var receiver = recIdx >= 0 && cols.Count > recIdx ? cols[recIdx].Trim() : "";
+                        var tag = tagIdx >= 0 && cols.Count > tagIdx ? cols[tagIdx].Trim() : "";
+
+                        // Standardize heat number (replace embedded newlines)
+                        if (!string.IsNullOrWhiteSpace(heat))
+                        {
+                            var heatLines = heat.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                                                .Select(h => h.Trim())
+                                                .Where(h => !string.IsNullOrEmpty(h));
+                            heat = string.Join(", ", heatLines);
+                            if (heat.Length > 150)
+                            {
+                                heat = heat.Substring(0, 147) + "...";
+                            }
+                        }
+
+                        decimal qty = 1;
+                        if (!string.IsNullOrWhiteSpace(qtyStr))
+                        {
+                            var cleanedQty = qtyStr.Replace(",", "").Trim();
+                            if (decimal.TryParse(cleanedQty, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedQty))
+                            {
+                                qty = parsedQty;
+                            }
+                        }
+
+                        DateTime? recvDate = ParseDate(dateStr);
+
+                        // Vendor lookup by PO
+                        string vendor = "";
+                        if (!string.IsNullOrEmpty(po))
+                        {
+                            if (vendorLookup.TryGetValue(po, out var v1)) vendor = v1;
+                            else if (vendorLookup.TryGetValue(po.TrimStart('0'), out var v2)) vendor = v2;
+                            else if (vendorLookup.TryGetValue(po.PadLeft(4, '0'), out var v3)) vendor = v3;
+                            else if (vendorLookup.TryGetValue($"251078C{po}", out var v4)) vendor = v4;
+                        }
+
+                        if (string.IsNullOrEmpty(vendor))
+                        {
+                            vendor = "CNRL Supplier";
+                        }
+
+                        string fullPo = string.IsNullOrWhiteSpace(po) 
+                            ? "251078C" 
+                            : (po.StartsWith("251078", StringComparison.OrdinalIgnoreCase) ? po : $"251078C{po.PadLeft(4, '0')}");
+
+                        string recId = !string.IsNullOrWhiteSpace(form) 
+                            ? form 
+                            : (!string.IsNullOrWhiteSpace(po) ? $"C{po.TrimStart('0')}" : $"REC-{idCounter:D4}");
+
+                        items.Add(new MaterialItem
+                        {
+                            Id = idCounter++,
+                            JobNumber = "251078",
+                            PoNumber = fullPo,
+                            ReceiverId = recId,
+                            VendorName = vendor,
+                            Description = string.IsNullOrWhiteSpace(desc) ? $"{cat} {subcat}".Trim() : desc,
+                            BomId = string.IsNullOrWhiteSpace(bomId) ? "N/A" : bomId,
+                            QuantityShipped = qty,
+                            QuantityReceived = qty,
+                            Unit = "EA",
+                            HeatNumber = heat,
+                            SerialNumber = tag,
+                            BinLocation = string.IsNullOrWhiteSpace(loc) ? "Walkway" : loc,
+                            ReceivedBy = string.IsNullOrWhiteSpace(receiver) ? "Kris" : receiver,
+                            ReceivedDate = recvDate,
+                            Status = "Complete"
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
+        if (items.Count == 0)
+        {
+            items = GetFallbackMaterialItems();
+        }
+
+        return items;
+    }
+
+    public static List<MaterialItem> GetFallbackMaterialItems()
+    {
+        return new List<MaterialItem>
+        {
+            new()
+            {
+                Id = 1,
+                JobNumber = "251078",
+                PoNumber = "251078C0013",
+                ReceiverId = "80225923",
+                VendorName = "Master Flo Valve",
+                Description = "4\" HUB CONNECTION ANGLE CHOKE VALVE 1500# TAG# HV-XX05",
+                BomId = "CNRL-CSS-026",
+                QuantityShipped = 10,
+                QuantityReceived = 10,
+                Unit = "EA",
+                HeatNumber = "1000353567, 1000353568",
+                BinLocation = "Walkway",
+                ReceivedBy = "Kris",
+                ReceivedDate = new DateTime(2026, 9, 17),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 2,
+                JobNumber = "251078",
+                PoNumber = "251078C0433",
+                ReceiverId = "C0433",
+                VendorName = "Comco Pipe & Supply Company",
+                Description = "1\" GATE VLV SB CL 800 SW x TE BB A350-LF2 CL1 TR 12",
+                BomId = "CNRL-028",
+                QuantityShipped = 4,
+                QuantityReceived = 4,
+                Unit = "EA",
+                HeatNumber = "B2019",
+                BinLocation = "Bay 1 - Receiving Floor",
+                ReceivedBy = "Kris",
+                ReceivedDate = new DateTime(2026, 9, 25),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 3,
+                JobNumber = "251078",
+                PoNumber = "251078C0430",
+                ReceiverId = "C0430",
+                VendorName = "Pickford",
+                Description = "Grip-Tight Plug Purchase 16\" sch 60",
+                BomId = "GT-PLUG-16",
+                QuantityShipped = 2,
+                QuantityReceived = 2,
+                Unit = "EA",
+                HeatNumber = "PK-88210",
+                BinLocation = "Bay 1 - Receiving Floor",
+                ReceivedBy = "Laurence",
+                ReceivedDate = new DateTime(2026, 10, 2),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 4,
+                JobNumber = "251078",
+                PoNumber = "251078C0438",
+                ReceiverId = "16748-001",
+                VendorName = "Precision Fabrication",
+                Description = "6\" PIPE SHOE TAG# S13-B-6-6 TRIM FOR 6\" XXS A333 REPAD",
+                BomId = "CNRL-602",
+                QuantityShipped = 2,
+                QuantityReceived = 2,
+                Unit = "EA",
+                HeatNumber = "PF-9941",
+                BinLocation = "Bay 2 - Fabrication Staging",
+                ReceivedBy = "Tyler",
+                ReceivedDate = new DateTime(2026, 10, 2),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 5,
+                JobNumber = "251078",
+                PoNumber = "251078C0442",
+                ReceiverId = "C0442",
+                VendorName = "Trans Am Piping Products Ltd",
+                Description = "2\" 1500# RF Blind Flange A105N",
+                BomId = "FLG2-9-15RFBL105",
+                QuantityShipped = 2,
+                QuantityReceived = 2,
+                Unit = "EA",
+                HeatNumber = "TA-88402",
+                BinLocation = "Bay 1 - Receiving Floor",
+                ReceivedBy = "Simon",
+                ReceivedDate = new DateTime(2026, 10, 3),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 6,
+                JobNumber = "251078",
+                PoNumber = "251078C0045",
+                ReceiverId = "C0045",
+                VendorName = "Canadian Natural Resources Ltd.",
+                Description = "12\" Sch 40(10.3) BE x BE A106-B SMLS",
+                BomId = "PIPE1240106",
+                QuantityShipped = 1786,
+                QuantityReceived = 1786,
+                Unit = "EA",
+                HeatNumber = "H88120",
+                BinLocation = "Yard Row A - Pipe Racks",
+                ReceivedBy = "Yard Crew",
+                ReceivedDate = new DateTime(2026, 9, 24),
+                Status = "Complete"
+            },
+            new()
+            {
+                Id = 7,
+                JobNumber = "251078",
+                PoNumber = "251078C0077",
+                ReceiverId = "C0077",
+                VendorName = "Canadian Natural Resources Ltd.",
+                Description = "12\"x 8\" Red Tee Sch 40/Std A234-WPB",
+                BomId = "TEE12-8-40STD234",
+                QuantityShipped = 4,
+                QuantityReceived = 4,
+                Unit = "EA",
+                HeatNumber = "T91204",
+                BinLocation = "Bay 1 - Receiving Floor",
+                ReceivedBy = "Brandon",
+                ReceivedDate = new DateTime(2026, 9, 24),
+                Status = "Complete"
+            }
+        };
+    }
+
+    public List<InspectionLineItem> LoadVistaBomForPo(string poNumber, string? jpKey, int receivingLogEntryId)
+    {
+        var lines = new List<InspectionLineItem>();
+        var vistaFile = Path.Combine(_importsDirectory, "251078 MMT - VISTA BOM.csv");
+
+        if (File.Exists(vistaFile))
+        {
+            try
+            {
+                using var reader = new StreamReader(vistaFile, Encoding.UTF8);
+                var recordsEnum = ReadCsvRecords(reader).GetEnumerator();
+                int descIdx = -1, bomIdx = -1, orderedIdx = -1, recIdx = -1, dueIdx = -1, umIdx = -1, poIdx = -1, lineIdx = -1;
+
+                while (recordsEnum.MoveNext())
+                {
+                    var cols = recordsEnum.Current;
+                    int dIdx = cols.FindIndex(h => CleanHeader(h).Contains("Description", StringComparison.OrdinalIgnoreCase));
+                    int bIdx = cols.FindIndex(h => CleanHeader(h).Equals("BOM ID", StringComparison.OrdinalIgnoreCase));
+                    if (dIdx >= 0 && bIdx >= 0)
+                    {
+                        descIdx = dIdx;
+                        bomIdx = bIdx;
+                        orderedIdx = cols.FindIndex(h => CleanHeader(h).Contains("Ordered", StringComparison.OrdinalIgnoreCase));
+                        recIdx = cols.FindIndex(h => CleanHeader(h).Contains("Received", StringComparison.OrdinalIgnoreCase));
+                        dueIdx = cols.FindIndex(h => CleanHeader(h).Contains("Due", StringComparison.OrdinalIgnoreCase));
+                        umIdx = cols.FindIndex(h => CleanHeader(h).Equals("UM", StringComparison.OrdinalIgnoreCase));
+                        poIdx = cols.FindIndex(h => CleanHeader(h).Contains("PO", StringComparison.OrdinalIgnoreCase));
+                        lineIdx = cols.FindIndex(h => CleanHeader(h).Contains("Line", StringComparison.OrdinalIgnoreCase));
+                        break;
+                    }
+                }
+
+                if (descIdx >= 0 && poIdx >= 0)
+                {
+                    string targetPo1 = (poNumber ?? "").Trim();
+                    string targetPoClean = targetPo1.TrimStart('0');
+                    string targetPoPadded = targetPo1.PadLeft(4, '0');
+                    string targetJp = (jpKey ?? "").Trim();
+
+                    int lineCounter = 1;
+                    while (recordsEnum.MoveNext())
+                    {
+                        var cols = recordsEnum.Current;
+                        if (cols.Count <= Math.Max(descIdx, poIdx)) continue;
+
+                        var rowPo = cols[poIdx].Trim();
+                        if (string.IsNullOrEmpty(rowPo)) continue;
+
+                        bool matches = false;
+                        if (!string.IsNullOrEmpty(targetJp) && rowPo.Equals(targetJp, StringComparison.OrdinalIgnoreCase))
+                        {
+                            matches = true;
+                        }
+                        else if (!string.IsNullOrEmpty(targetPo1))
+                        {
+                            if (rowPo.Equals(targetPo1, StringComparison.OrdinalIgnoreCase) ||
+                                rowPo.EndsWith(targetPo1, StringComparison.OrdinalIgnoreCase) ||
+                                (!string.IsNullOrEmpty(targetPoClean) && (rowPo.EndsWith(targetPoClean, StringComparison.OrdinalIgnoreCase) || rowPo.Equals(targetPoClean, StringComparison.OrdinalIgnoreCase))) ||
+                                rowPo.EndsWith(targetPoPadded, StringComparison.OrdinalIgnoreCase) ||
+                                rowPo.Equals($"251078C{targetPoPadded}", StringComparison.OrdinalIgnoreCase))
+                            {
+                                matches = true;
+                            }
+                        }
+
+                        if (!matches) continue;
+
+                        var desc = cols[descIdx].Trim();
+                        var bomId = bomIdx >= 0 && cols.Count > bomIdx ? cols[bomIdx].Trim() : "";
+                        var ordStr = orderedIdx >= 0 && cols.Count > orderedIdx ? cols[orderedIdx].Trim() : "0";
+                        var recStr = recIdx >= 0 && cols.Count > recIdx ? cols[recIdx].Trim() : "0";
+                        var dueStr = dueIdx >= 0 && cols.Count > dueIdx ? cols[dueIdx].Trim() : "0";
+                        var um = umIdx >= 0 && cols.Count > umIdx ? cols[umIdx].Trim() : "EA";
+                        var lineNum = lineIdx >= 0 && cols.Count > lineIdx ? cols[lineIdx].Trim() : $"{lineCounter}.00";
+
+                        decimal ordered = 0;
+                        if (decimal.TryParse(ordStr.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var o)) ordered = o;
+
+                        decimal received = 0;
+                        if (decimal.TryParse(recStr.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var r)) received = r;
+
+                        decimal due = 0;
+                        if (decimal.TryParse(dueStr.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var d)) due = d;
+
+                        lines.Add(new InspectionLineItem
+                        {
+                            Id = lineCounter++,
+                            ReceivingLogEntryId = receivingLogEntryId,
+                            JpKey = string.IsNullOrWhiteSpace(jpKey) ? rowPo : jpKey,
+                            PoNumber = rowPo,
+                            PoLineNumber = lineNum,
+                            ItemDescription = desc,
+                            BomId = string.IsNullOrWhiteSpace(bomId) ? "N/A" : bomId,
+                            QuantityOrdered = ordered,
+                            QuantityPreviouslyReceived = received,
+                            QuantityDue = due,
+                            UnitOfMeasure = string.IsNullOrWhiteSpace(um) ? "EA" : um,
+                            IsDescriptionMatched = false,
+                            QuantityReceivedThisShipment = due > 0 ? due : 0,
+                            HeatNumber = "",
+                            SerialNumber = "",
+                            StorageLocation = "",
+                            Notes = ""
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
+        if (lines.Count == 0)
+        {
+            lines = GetFallbackInspectionLines(poNumber ?? string.Empty, jpKey, receivingLogEntryId);
+        }
+
+        return lines;
+    }
+
+    public static List<InspectionLineItem> GetFallbackInspectionLines(string poNumber, string? jpKey, int receivingLogEntryId)
+    {
+        var cleanPo = (poNumber ?? "").Trim();
+        var key = string.IsNullOrWhiteSpace(jpKey) ? $"251078C{cleanPo.PadLeft(4, '0')}" : jpKey;
+
+        if (cleanPo.Contains("0270") || cleanPo.Contains("270"))
+        {
+            return new List<InspectionLineItem>
+            {
+                new()
+                {
+                    Id = 1,
+                    ReceivingLogEntryId = receivingLogEntryId,
+                    JpKey = key,
+                    PoNumber = "0270",
+                    PoLineNumber = "1.00",
+                    ItemDescription = "3/4\" x 5-1/2\" Stud Bolt A193 B7 w/ 2 Heavy Hex Nuts A194 2H",
+                    BomId = "SNG-34-512-B7",
+                    QuantityOrdered = 100,
+                    QuantityPreviouslyReceived = 0,
+                    QuantityDue = 100,
+                    UnitOfMeasure = "EA",
+                    IsDescriptionMatched = true,
+                    QuantityReceivedThisShipment = 100,
+                    HeatNumber = "B7-99214",
+                    SerialNumber = "LOT-260904-A",
+                    StorageLocation = "4 D 2 2",
+                    Notes = "Count verified. MTR on file."
+                },
+                new()
+                {
+                    Id = 2,
+                    ReceivingLogEntryId = receivingLogEntryId,
+                    JpKey = key,
+                    PoNumber = "0270",
+                    PoLineNumber = "2.00",
+                    ItemDescription = "1\" x 7\" Stud Bolt A193 B7 w/ 2 Heavy Hex Nuts A194 2H",
+                    BomId = "SNG-10-700-B7",
+                    QuantityOrdered = 80,
+                    QuantityPreviouslyReceived = 0,
+                    QuantityDue = 80,
+                    UnitOfMeasure = "EA",
+                    IsDescriptionMatched = true,
+                    QuantityReceivedThisShipment = 80,
+                    HeatNumber = "B7-88102",
+                    SerialNumber = "LOT-260904-B",
+                    StorageLocation = "4 D 2 2",
+                    Notes = "Box unbroken. Thread inspection OK."
+                },
+                new()
+                {
+                    Id = 3,
+                    ReceivingLogEntryId = receivingLogEntryId,
+                    JpKey = key,
+                    PoNumber = "0270",
+                    PoLineNumber = "3.00",
+                    ItemDescription = "3\" 600# 316SS Spiral Wound Gasket w/ Flexible Graphite Filler",
+                    BomId = "GSK-SW-3-600",
+                    QuantityOrdered = 25,
+                    QuantityPreviouslyReceived = 0,
+                    QuantityDue = 25,
+                    UnitOfMeasure = "EA",
+                    IsDescriptionMatched = true,
+                    QuantityReceivedThisShipment = 25,
+                    HeatNumber = "HT-GSK-316-44",
+                    SerialNumber = "TAG-GSK-3-600",
+                    StorageLocation = "4 D 2 2",
+                    Notes = "Color code orange/green verified."
+                },
+                new()
+                {
+                    Id = 4,
+                    ReceivingLogEntryId = receivingLogEntryId,
+                    JpKey = key,
+                    PoNumber = "0270",
+                    PoLineNumber = "4.00",
+                    ItemDescription = "4\" 600# 316SS Spiral Wound Gasket w/ Flexible Graphite Filler",
+                    BomId = "GSK-SW-4-600",
+                    QuantityOrdered = 20,
+                    QuantityPreviouslyReceived = 0,
+                    QuantityDue = 20,
+                    UnitOfMeasure = "EA",
+                    IsDescriptionMatched = true,
+                    QuantityReceivedThisShipment = 20,
+                    HeatNumber = "HT-GSK-316-52",
+                    SerialNumber = "TAG-GSK-4-600",
+                    StorageLocation = "4 D 2 2",
+                    Notes = "Visual inspection passed."
+                }
+            };
+        }
+
+        return new List<InspectionLineItem>
+        {
+            new()
+            {
+                Id = 1,
+                ReceivingLogEntryId = receivingLogEntryId,
+                JpKey = key,
+                PoNumber = cleanPo,
+                PoLineNumber = "1.00",
+                ItemDescription = $"Shipment Items for PO {cleanPo} (CNRL Job 251078)",
+                BomId = "GEN-ITEM-01",
+                QuantityOrdered = 1,
+                QuantityPreviouslyReceived = 0,
+                QuantityDue = 1,
+                UnitOfMeasure = "EA",
+                IsDescriptionMatched = false,
+                QuantityReceivedThisShipment = 1,
+                HeatNumber = "",
+                SerialNumber = "",
+                StorageLocation = "Walkway",
+                Notes = ""
+            }
+        };
+    }
+
+    private Dictionary<string, string> GetPoVendorLookup()
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Prepopulate known vendors for Job 251078
+        dict["0013"] = "Master Flo Valve";
+        dict["0014"] = "Master Flo Valve";
+        dict["0001"] = "Comco Pipe and Supply Company";
+        dict["0045"] = "Canadian Natural Resources Ltd.";
+        dict["0074"] = "Canadian Natural Resources Ltd.";
+        dict["0077"] = "Canadian Natural Resources Ltd.";
+        dict["0142"] = "Canadian Natural Resources Ltd.";
+        dict["0152"] = "Canadian Natural Resources Ltd.";
+        dict["0355"] = "Trans Am Piping Products Ltd";
+        dict["0361"] = "Comco Pipe and Supply Company";
+        dict["0383"] = "Canadian Natural Resources Ltd.";
+        dict["0430"] = "Pickford";
+        dict["0433"] = "Comco Pipe & Supply Company";
+        dict["0435"] = "Comco Pipe and Supply Company";
+        dict["0438"] = "Precision Fabrication";
+        dict["0442"] = "Trans Am Piping Products Ltd";
+
+        // Also harvest from MML Expected Receiving
+        var expFile = Path.Combine(_importsDirectory, "MML - Expected Receiving.csv");
+        if (File.Exists(expFile))
+        {
+            try
+            {
+                using var reader = new StreamReader(expFile, Encoding.UTF8);
+                var recordsEnum = ReadCsvRecords(reader).GetEnumerator();
+                if (recordsEnum.MoveNext())
+                {
+                    var headers = recordsEnum.Current;
+                    int jobIdx = headers.FindIndex(h => CleanHeader(h).StartsWith("Job", StringComparison.OrdinalIgnoreCase));
+                    int poIdx = headers.FindIndex(h => CleanHeader(h).StartsWith("PO", StringComparison.OrdinalIgnoreCase));
+                    int vendorIdx = headers.FindIndex(h => CleanHeader(h).StartsWith("Vendor", StringComparison.OrdinalIgnoreCase));
+
+                    while (recordsEnum.MoveNext())
+                    {
+                        var cols = recordsEnum.Current;
+                        if (jobIdx < 0 || poIdx < 0 || vendorIdx < 0 || cols.Count <= Math.Max(jobIdx, Math.Max(poIdx, vendorIdx))) continue;
+                        var job = cols[jobIdx].Trim();
+                        var po = cols[poIdx].Trim();
+                        var vendor = cols[vendorIdx].Trim();
+                        if (job.StartsWith("251078", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(po) && !string.IsNullOrEmpty(vendor))
+                        {
+                            dict[po] = vendor;
+                            dict[po.TrimStart('0')] = vendor;
+                            dict[po.PadLeft(4, '0')] = vendor;
+                            dict[$"{job}{po}"] = vendor;
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        return dict;
+    }
+
     private static List<ExpectedOrder> GetFallbackSeedOrders()
     {
         var today = new DateTime(2026, 10, 5);
         return new List<ExpectedOrder>
         {
             new() { Id = 1, JobNumber = "251078C", PoNumber = "0430", VendorName = "Pickford", PackingSlipNumber = "PK-99120", LoadType = "Flanges & Fittings", ExpectedDate = today.AddDays(-3), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
-            new() { Id = 2, JobNumber = "261030C", PoNumber = "0260", VendorName = "Sureway Metals", PackingSlipNumber = "SW-45210", LoadType = "Supports", ExpectedDate = today.AddDays(-3), HasLandedInYard = true, ActualArrivalDate = today.AddDays(-3).AddHours(14), YardStatus = "Landed in Yard", ReceivingStatus = "Pending Inspection", ClientName = "Enbridge" },
-            new() { Id = 3, JobNumber = "261030C", PoNumber = "0262", VendorName = "Calgary Fasteners", PackingSlipNumber = "CF-88201", LoadType = "SNG / Bolt-Up", ExpectedDate = today.AddDays(-3), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "Enbridge" },
-            new() { Id = 4, JobNumber = "241143C", PoNumber = "0650", VendorName = "Comco Pipe & Supply", PackingSlipNumber = "1368291-A", LoadType = "Valves", ExpectedDate = today, HasLandedInYard = true, ActualArrivalDate = today.AddHours(9), YardStatus = "Landed in Yard", ReceivingStatus = "Pending Inspection", ClientName = "CNRL" },
-            new() { Id = 5, JobNumber = "261037C", PoNumber = "0280", VendorName = "Armor Alloys", PackingSlipNumber = "SC-119284", LoadType = "Flanges & Fittings", ExpectedDate = today, HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CONOCO" },
-            new() { Id = 6, JobNumber = "261073C", PoNumber = "0056", VendorName = "CFP Industries", PackingSlipNumber = "CFP-3021", LoadType = "Pipe & Fittings", ExpectedDate = today, HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "Cenovus" },
-            new() { Id = 7, JobNumber = "241143C", PoNumber = "0651", VendorName = "Precision Piping", PackingSlipNumber = "PP-7721", LoadType = "Pipe", ExpectedDate = today, HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
-            new() { Id = 8, JobNumber = "261037C", PoNumber = "0288", VendorName = "Quest Metals", PackingSlipNumber = "QM-1092", LoadType = "Supports", ExpectedDate = today.AddDays(1), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CONOCO" },
-            new() { Id = 9, JobNumber = "261030C", PoNumber = "0265", VendorName = "Apex Distribution", PackingSlipNumber = "APX-88231", LoadType = "Valves", ExpectedDate = today.AddDays(1), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "Enbridge" },
-            new() { Id = 10, JobNumber = "251078C", PoNumber = "0426", VendorName = "Grayloc Products", PackingSlipNumber = "GL-4402", LoadType = "Flanges & Fittings", ExpectedDate = today.AddDays(3), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
-            new() { Id = 11, JobNumber = "261030C", PoNumber = "0278", VendorName = "Spartan Controls", PackingSlipNumber = "80789122", LoadType = "Instrumentation", ExpectedDate = today.AddDays(2), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "Enbridge" },
-            new() { Id = 12, JobNumber = "261073C", PoNumber = "0042", VendorName = "Comco Pipe & Supply", PackingSlipNumber = "1359102", LoadType = "Valves", ExpectedDate = today.AddDays(-6), HasLandedInYard = false, YardStatus = "Past Due", ReceivingStatus = "Not Received", ClientName = "Cenovus" }
+            new() { Id = 2, JobNumber = "251078C", PoNumber = "0438", VendorName = "Precision Fabrication", PackingSlipNumber = "16748-001", LoadType = "Supports", ExpectedDate = today.AddDays(-3), HasLandedInYard = true, ActualArrivalDate = today.AddDays(-3).AddHours(14), YardStatus = "Landed in Yard", ReceivingStatus = "Pending Inspection", ClientName = "CNRL" },
+            new() { Id = 3, JobNumber = "251078C", PoNumber = "0428", VendorName = "Calgary Fasteners", PackingSlipNumber = "CF-88201", LoadType = "SNG / Bolt-Up", ExpectedDate = today.AddDays(-3), HasLandedInYard = true, ActualArrivalDate = today.AddDays(-3).AddHours(10), YardStatus = "Landed in Yard", ReceivingStatus = "Pending Inspection", ClientName = "CNRL" },
+            new() { Id = 4, JobNumber = "251078C", PoNumber = "0420", VendorName = "Master Flo Valve", PackingSlipNumber = "80225923", LoadType = "Valves", ExpectedDate = today, HasLandedInYard = true, ActualArrivalDate = today.AddHours(9), YardStatus = "Landed in Yard", ReceivingStatus = "Pending Inspection", ClientName = "CNRL" },
+            new() { Id = 5, JobNumber = "251078C", PoNumber = "0425", VendorName = "Spartan Controls", PackingSlipNumber = "80789122", LoadType = "Instrumentation", ExpectedDate = today, HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 6, JobNumber = "251078C", PoNumber = "0431", VendorName = "CFP Industries", PackingSlipNumber = "CFP-3021", LoadType = "Pipe", ExpectedDate = today.AddDays(1), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 7, JobNumber = "251078C", PoNumber = "0435", VendorName = "Comco Pipe & Supply", PackingSlipNumber = "1368291-A", LoadType = "Supports", ExpectedDate = today.AddDays(1), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 8, JobNumber = "251078C", PoNumber = "0442", VendorName = "Trans Am Piping Products Ltd", PackingSlipNumber = "C26-34702", LoadType = "Flanges & Fittings", ExpectedDate = today.AddDays(2), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 9, JobNumber = "251078C", PoNumber = "0426", VendorName = "Grayloc Products", PackingSlipNumber = "GL-4402", LoadType = "Flanges & Fittings", ExpectedDate = today.AddDays(3), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 10, JobNumber = "251078C", PoNumber = "0440", VendorName = "Armor Alloys", PackingSlipNumber = "SC-119284", LoadType = "Flanges & Fittings", ExpectedDate = today.AddDays(4), HasLandedInYard = false, YardStatus = "In Transit", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 11, JobNumber = "251078C", PoNumber = "0433", VendorName = "Comco Pipe & Supply", PackingSlipNumber = "1359102", LoadType = "Valves", ExpectedDate = today.AddDays(-10), HasLandedInYard = false, YardStatus = "Past Due", ReceivingStatus = "Not Received", ClientName = "CNRL" },
+            new() { Id = 12, JobNumber = "251078C", PoNumber = "0434", VendorName = "Trans Am Piping Products Ltd", PackingSlipNumber = "C26-34410", LoadType = "Pipe", ExpectedDate = today.AddDays(-7), HasLandedInYard = false, YardStatus = "Past Due", ReceivingStatus = "Not Received", ClientName = "CNRL" }
         };
     }
 
