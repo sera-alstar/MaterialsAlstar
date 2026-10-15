@@ -137,7 +137,11 @@
            asp-route-VendorFilter="@Model.VendorFilter"
            asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
            asp-route-SearchTerm="@Model.SearchTerm"
-           class="hs-view-tab text-decoration-none @(Model.ViewMode == "3day" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+           asp-route-FilterJpKey="@Model.FilterJpKey"
+           asp-route-FilterVendor="@Model.FilterVendor"
+           asp-route-FilterPackingSlip="@Model.FilterPackingSlip"
+           asp-route-FilterDate="@Model.FilterDate"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "3day" && string.IsNullOrEmpty(Model.SearchTerm) && string.IsNullOrEmpty(Model.FilterJpKey) ? "active" : "")">
             <i class="bi bi-calendar3-range"></i> 
             3-Day Window (Yesterday, Today, Tomorrow) 
             <span class="badge bg-primary text-white rounded-pill ms-1">@Model.TotalWindowOrders</span>
@@ -150,7 +154,11 @@
            asp-route-VendorFilter="@Model.VendorFilter"
            asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
            asp-route-SearchTerm="@Model.SearchTerm"
-           class="hs-view-tab text-decoration-none @(Model.ViewMode == "pastdue" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+           asp-route-FilterJpKey="@Model.FilterJpKey"
+           asp-route-FilterVendor="@Model.FilterVendor"
+           asp-route-FilterPackingSlip="@Model.FilterPackingSlip"
+           asp-route-FilterDate="@Model.FilterDate"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "pastdue" && string.IsNullOrEmpty(Model.SearchTerm) && string.IsNullOrEmpty(Model.FilterJpKey) ? "active" : "")">
             <i class="bi bi-exclamation-octagon text-danger"></i> 
             Past Due (&gt; 1 Day) 
             <span class="badge @(Model.PastDueCount > 0 ? "bg-danger text-white" : "bg-secondary-subtle text-secondary") rounded-pill ms-1">@Model.PastDueCount</span>
@@ -163,7 +171,11 @@
            asp-route-VendorFilter="@Model.VendorFilter"
            asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
            asp-route-SearchTerm="@Model.SearchTerm"
-           class="hs-view-tab text-decoration-none @(Model.ViewMode == "future" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+           asp-route-FilterJpKey="@Model.FilterJpKey"
+           asp-route-FilterVendor="@Model.FilterVendor"
+           asp-route-FilterPackingSlip="@Model.FilterPackingSlip"
+           asp-route-FilterDate="@Model.FilterDate"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "future" && string.IsNullOrEmpty(Model.SearchTerm) && string.IsNullOrEmpty(Model.FilterJpKey) ? "active" : "")">
             <i class="bi bi-arrow-right-circle text-info"></i> 
             @(Model.IsThursdayOrFriday ? "Next Week (" + Model.NextWeekMonday.ToString("MMM d") + " - " + Model.NextWeekFriday.ToString("MMM d") + ")" : "Upcoming / Next Week")
             <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.NextWeekCount</span>
@@ -176,7 +188,11 @@
            asp-route-VendorFilter="@Model.VendorFilter"
            asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
            asp-route-SearchTerm="@Model.SearchTerm"
-           class="hs-view-tab text-decoration-none @(Model.ViewMode == "all" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+           asp-route-FilterJpKey="@Model.FilterJpKey"
+           asp-route-FilterVendor="@Model.FilterVendor"
+           asp-route-FilterPackingSlip="@Model.FilterPackingSlip"
+           asp-route-FilterDate="@Model.FilterDate"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "all" && string.IsNullOrEmpty(Model.SearchTerm) && string.IsNullOrEmpty(Model.FilterJpKey) ? "active" : "")">
             <i class="bi bi-list-check"></i> 
             All Unreceived Orders 
             <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.TotalOpenOrders</span>
@@ -287,17 +303,29 @@
     </div>
 </div>
 
+@{
+    var hasActiveOrderFilters = !string.IsNullOrEmpty(Model.SearchTerm) 
+        || !string.IsNullOrEmpty(Model.VendorFilter) 
+        || !string.IsNullOrEmpty(Model.LoadTypeFilter) 
+        || !string.IsNullOrEmpty(Model.YardStatusFilter)
+        || !string.IsNullOrEmpty(Model.FilterJpKey)
+        || !string.IsNullOrEmpty(Model.FilterVendor)
+        || !string.IsNullOrEmpty(Model.FilterPackingSlip)
+        || !string.IsNullOrEmpty(Model.FilterDate);
+}
+
 <!-- Toolbar: Search, Filters & Yard Status -->
 <div class="hs-toolbar px-3 py-2 mt-3">
-    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100" id="orderingLogFilterForm">
         <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
         <input type="hidden" name="ReferenceDateStr" value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" />
 
+        <!-- Row 1: Search, Dropdowns, Apply, Clear -->
         <div class="d-flex flex-wrap align-items-center gap-2">
             <!-- Search Input with JP Key prompt -->
             <div class="hs-search-box position-relative" style="min-width: 320px;">
                 <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
-                <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
+                <input type="text" name="SearchTerm" id="orderSearchTermInput" value="@Model.SearchTerm" 
                        class="form-control form-control-sm ps-4" 
                        placeholder="Search Job#, PO#, or JP Key (e.g. 251078C0123)..." />
             </div>
@@ -331,9 +359,9 @@
                 <i class="bi bi-funnel"></i> Apply
             </button>
 
-            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.VendorFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter) || !string.IsNullOrEmpty(Model.YardStatusFilter))
+            @if (hasActiveOrderFilters)
             {
-                <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")" class="text-decoration-none text-danger small ms-1">
+                <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")" class="text-decoration-none text-danger small ms-1" id="orderClearAllBtn" onclick="clearOrderLiveFilters()">
                     <i class="bi bi-x-circle"></i> Clear filters
                 </a>
             }
@@ -345,6 +373,54 @@
             </span>
             <span class="text-secondary small">|</span>
             <span class="text-muted small">Showing @Model.Orders.Count shipments</span>
+        </div>
+
+        <!-- Row 2: Text Filter Fields for JP Key, Vendor, Packing Slip, and Date -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100 pt-2 border-top mt-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <span class="text-muted small fw-semibold me-1"><i class="bi bi-funnel-fill text-primary me-1"></i>Column Filters:</span>
+                
+                <div class="position-relative" style="min-width: 145px; max-width: 170px;">
+                    <i class="bi bi-key position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterJpKey" id="orderFilterJpKey" value="@Model.FilterJpKey" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter JP Key..." title="Filter by JP Key (e.g. 251078C0123)" />
+                </div>
+
+                <div class="position-relative" style="min-width: 155px; max-width: 180px;">
+                    <i class="bi bi-building position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterVendor" id="orderFilterVendor" value="@Model.FilterVendor" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Vendor..." title="Filter by Vendor Name" />
+                </div>
+
+                <div class="position-relative" style="min-width: 165px; max-width: 190px;">
+                    <i class="bi bi-receipt position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterPackingSlip" id="orderFilterPackingSlip" value="@Model.FilterPackingSlip" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Packing Slip..." title="Filter by Packing Slip #" />
+                </div>
+
+                <div class="position-relative" style="min-width: 155px; max-width: 180px;">
+                    <i class="bi bi-calendar-event position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterDate" id="orderFilterDate" value="@Model.FilterDate" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Date..." title="Filter by Expected Date (e.g. Oct 5, 2026, 10/05)" />
+                </div>
+
+                <button type="submit" class="btn btn-sm btn-outline-primary py-1">
+                    <i class="bi bi-search"></i> Filter
+                </button>
+
+                @if (hasActiveOrderFilters)
+                {
+                    <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")" class="btn btn-sm btn-outline-danger py-1" onclick="clearOrderLiveFilters()">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </a>
+                }
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border small" id="orderLiveMatchCounterBadge">
+                    <i class="bi bi-check2-circle text-success me-1"></i><span id="orderLiveMatchCount">Showing @Model.Orders.Count shipments</span>
+                </span>
+            </div>
         </div>
     </form>
 </div>
@@ -439,6 +515,7 @@
                                 data-vendor="@order.VendorName"
                                 data-slip="@(order.PackingSlipNumber ?? "")"
                                 data-loadtype="@order.LoadType"
+                                data-date="@(order.ExpectedDate.HasValue ? $"{order.ExpectedDate.Value:yyyy-MM-dd} {order.ExpectedDate.Value:MMM d, yyyy} {order.ExpectedDate.Value:MM/dd/yyyy} {order.ExpectedDate.Value:dddd} {order.ExpectedDate.Value:MMMM}" : "")"
                                 data-expected="@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")"
                                 data-expected-ts="@(order.ExpectedDate.HasValue ? order.ExpectedDate.Value.Ticks : 0)"
                                 data-yardstatus="@(order.HasLandedInYard ? "Landed in Yard" : (order.ExpectedDate.HasValue && order.ExpectedDate.Value.Date < Model.YesterdayBusinessDay.Date ? "Overdue In Transit" : "In Transit"))"
@@ -1302,8 +1379,95 @@
         };
     }
 
+    function initOrderingLiveFiltering() {
+        var searchInput = document.getElementById('orderSearchTermInput');
+        var jpInput = document.getElementById('orderFilterJpKey');
+        var vendorInput = document.getElementById('orderFilterVendor');
+        var slipInput = document.getElementById('orderFilterPackingSlip');
+        var dateInput = document.getElementById('orderFilterDate');
+
+        function applyLiveFilters() {
+            var searchVal = (searchInput?.value || '').trim().toLowerCase();
+            var searchValClean = searchVal.replace(/[- ]/g, '');
+
+            var jpVal = (jpInput?.value || '').trim().toLowerCase().replace(/[- ]/g, '');
+            var vendorVal = (vendorInput?.value || '').trim().toLowerCase();
+            var slipVal = (slipInput?.value || '').trim().toLowerCase();
+            var dateVal = (dateInput?.value || '').trim().toLowerCase();
+
+            var totalVisible = 0;
+            var allRows = document.querySelectorAll('tr.order-log-row');
+
+            allRows.forEach(function(row) {
+                var rJp = (row.dataset.jpkey || '').toLowerCase().replace(/[- ]/g, '');
+                var rJob = (row.dataset.job || '').toLowerCase();
+                var rPo = (row.dataset.po || '').toLowerCase();
+                var rVendor = (row.dataset.vendor || '').toLowerCase();
+                var rSlip = (row.dataset.slip || '').toLowerCase();
+                var rLoadType = (row.dataset.loadtype || '').toLowerCase();
+                var rDate = (row.dataset.date || row.dataset.expected || '').toLowerCase();
+                var rClient = (row.dataset.client || '').toLowerCase();
+                var rPm = (row.dataset.pm || '').toLowerCase();
+                var rNotes = (row.dataset.notes || '').toLowerCase();
+
+                // 1. Check specific column text filters first
+                var matchJp = !jpVal || rJp.indexOf(jpVal) !== -1 || (rJob + rPo).replace(/[- ]/g, '').indexOf(jpVal) !== -1 || rJob.indexOf(jpVal) !== -1;
+                var matchVendor = !vendorVal || rVendor.indexOf(vendorVal) !== -1;
+                var matchSlip = !slipVal || rSlip.indexOf(slipVal) !== -1;
+                var matchDate = !dateVal || rDate.indexOf(dateVal) !== -1;
+
+                var passesFieldFilters = matchJp && matchVendor && matchSlip && matchDate;
+
+                // 2. Keep the original search fields looking through the filtered results from the other fields
+                var matchSearch = true;
+                if (passesFieldFilters && searchVal) {
+                    matchSearch = rJp.indexOf(searchValClean) !== -1 ||
+                                  (rJob + rPo).replace(/[- ]/g, '').indexOf(searchValClean) !== -1 ||
+                                  rJob.indexOf(searchVal) !== -1 ||
+                                  rPo.indexOf(searchVal) !== -1 ||
+                                  rVendor.indexOf(searchVal) !== -1 ||
+                                  rSlip.indexOf(searchVal) !== -1 ||
+                                  rLoadType.indexOf(searchVal) !== -1 ||
+                                  rClient.indexOf(searchVal) !== -1 ||
+                                  rPm.indexOf(searchVal) !== -1 ||
+                                  rNotes.indexOf(searchVal) !== -1 ||
+                                  rDate.indexOf(searchVal) !== -1;
+                }
+
+                if (passesFieldFilters && matchSearch) {
+                    row.style.display = '';
+                    totalVisible++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update match count badge
+            var countSpan = document.getElementById('orderLiveMatchCount');
+            if (countSpan) {
+                countSpan.textContent = 'Showing ' + totalVisible + ' shipment' + (totalVisible === 1 ? '' : 's');
+            }
+        }
+
+        [searchInput, jpInput, vendorInput, slipInput, dateInput].forEach(function(input) {
+            if (input) {
+                input.addEventListener('input', applyLiveFilters);
+            }
+        });
+
+        window.clearOrderLiveFilters = function() {
+            if (searchInput) searchInput.value = '';
+            if (jpInput) jpInput.value = '';
+            if (vendorInput) vendorInput.value = '';
+            if (slipInput) slipInput.value = '';
+            if (dateInput) dateInput.value = '';
+            applyLiveFilters();
+        };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         initTableSorting();
+        initOrderingLiveFiltering();
     });
 </script>
 }

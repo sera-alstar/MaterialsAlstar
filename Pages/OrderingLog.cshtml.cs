@@ -37,6 +37,18 @@ public class OrderingLogModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? YardStatusFilter { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? FilterJpKey { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterVendor { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterPackingSlip { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterDate { get; set; }
+
     // Date properties
     public DateTime ReferenceDate { get; set; }
     public DateTime YesterdayBusinessDay { get; set; }
@@ -123,31 +135,15 @@ public class OrderingLogModel : PageModel
             .OrderBy(j => j)
             .ToList();
 
-        // 3. Search Logic
-        // If a SearchTerm / JP Key is provided, search across ALL open orders (even outside the 3-day window)
-        // because an arriving shipment might have been expected anytime.
+        // 3. ViewMode & Text Filter Logic
         IEnumerable<ExpectedOrder> filtered;
 
-        if (!string.IsNullOrWhiteSpace(SearchTerm))
+        // If a SearchTerm or FilterJpKey is provided, search across ALL open orders (even outside the 3-day window)
+        // because an arriving shipment might have been expected anytime.
+        if (!string.IsNullOrWhiteSpace(SearchTerm) || !string.IsNullOrWhiteSpace(FilterJpKey))
         {
             IsJpSearchActive = true;
-            var term = SearchTerm.Trim().ToLowerInvariant();
-            var termClean = term.Replace("-", "").Replace(" ", "");
-
-            filtered = allOpenOrders.Where(o =>
-                o.JpKey.ToLowerInvariant().Contains(termClean) ||
-                $"{o.JobNumber}{o.PoNumber}".ToLowerInvariant().Contains(termClean) ||
-                o.JobNumber.ToLowerInvariant().Contains(term) ||
-                o.PoNumber.ToLowerInvariant().Contains(term) ||
-                o.VendorName.ToLowerInvariant().Contains(term) ||
-                o.PackingSlipNumber.ToLowerInvariant().Contains(term) ||
-                o.ClientName.ToLowerInvariant().Contains(term) ||
-                o.LoadType.ToLowerInvariant().Contains(term));
-
-            if (!filtered.Any())
-            {
-                IsSearchNotFound = true;
-            }
+            filtered = allOpenOrders;
         }
         else
         {
@@ -189,6 +185,71 @@ public class OrderingLogModel : PageModel
                         o.ExpectedDate.Value.Date >= YesterdayBusinessDay.Date &&
                         o.ExpectedDate.Value.Date <= TomorrowBusinessDay.Date);
                     break;
+            }
+        }
+
+        // Apply specific column text filters
+        if (!string.IsNullOrWhiteSpace(FilterJpKey))
+        {
+            var cleanKey = FilterJpKey.Trim().ToLowerInvariant().Replace("-", "").Replace(" ", "");
+            filtered = filtered.Where(o =>
+                o.JpKey.ToLowerInvariant().Replace("-", "").Replace(" ", "").Contains(cleanKey) ||
+                $"{o.JobNumber}{o.PoNumber}".ToLowerInvariant().Replace("-", "").Replace(" ", "").Contains(cleanKey) ||
+                o.JobNumber.ToLowerInvariant().Contains(cleanKey));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterVendor))
+        {
+            var vTerm = FilterVendor.Trim().ToLowerInvariant();
+            filtered = filtered.Where(o => o.VendorName != null && o.VendorName.ToLowerInvariant().Contains(vTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterPackingSlip))
+        {
+            var psTerm = FilterPackingSlip.Trim().ToLowerInvariant();
+            filtered = filtered.Where(o => o.PackingSlipNumber != null && o.PackingSlipNumber.ToLowerInvariant().Contains(psTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterDate))
+        {
+            var dTerm = FilterDate.Trim().ToLowerInvariant();
+            filtered = filtered.Where(o =>
+                (o.ExpectedDate.HasValue && (
+                    o.ExpectedDate.Value.ToString("yyyy-MM-dd").Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("MMM d, yyyy").ToLowerInvariant().Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("MM/dd/yyyy").Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("MM-dd-yyyy").Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("MMMM d, yyyy").ToLowerInvariant().Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("ddd").ToLowerInvariant().Contains(dTerm) ||
+                    o.ExpectedDate.Value.ToString("yyyy").Contains(dTerm)
+                )) ||
+                (o.ActualArrivalDate.HasValue && (
+                    o.ActualArrivalDate.Value.ToString("yyyy-MM-dd").Contains(dTerm) ||
+                    o.ActualArrivalDate.Value.ToString("MMM d, yyyy").ToLowerInvariant().Contains(dTerm) ||
+                    o.ActualArrivalDate.Value.ToString("MM/dd/yyyy").Contains(dTerm)
+                ))
+            );
+        }
+
+        // Keep the original search fields looking through the filtered results from the other fields
+        if (!string.IsNullOrWhiteSpace(SearchTerm))
+        {
+            var term = SearchTerm.Trim().ToLowerInvariant();
+            var termClean = term.Replace("-", "").Replace(" ", "");
+
+            filtered = filtered.Where(o =>
+                o.JpKey.ToLowerInvariant().Contains(termClean) ||
+                $"{o.JobNumber}{o.PoNumber}".ToLowerInvariant().Contains(termClean) ||
+                o.JobNumber.ToLowerInvariant().Contains(term) ||
+                o.PoNumber.ToLowerInvariant().Contains(term) ||
+                o.VendorName.ToLowerInvariant().Contains(term) ||
+                o.PackingSlipNumber.ToLowerInvariant().Contains(term) ||
+                o.ClientName.ToLowerInvariant().Contains(term) ||
+                o.LoadType.ToLowerInvariant().Contains(term));
+
+            if (!filtered.Any())
+            {
+                IsSearchNotFound = true;
             }
         }
 

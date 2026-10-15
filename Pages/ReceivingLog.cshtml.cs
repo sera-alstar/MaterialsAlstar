@@ -34,6 +34,18 @@ public class ReceivingLogModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? StatusFilter { get; set; } = "active"; // "active" (landed/inspecting), "all", "completed"
 
+    [BindProperty(SupportsGet = true)]
+    public string? FilterJpKey { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterVendor { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterPackingSlip { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? FilterDate { get; set; }
+
     // KPIs & Metrics
     public int TotalLandedCount { get; set; }
     public int TotalAdminPendingCount { get; set; }
@@ -137,6 +149,39 @@ public class ReceivingLogModel : PageModel
         // 3. Search & Filters
         IEnumerable<ReceivingLogEntry> filtered = allVerified;
 
+        // Apply specific column text filters first
+        if (!string.IsNullOrWhiteSpace(FilterJpKey))
+        {
+            var cleanKey = FilterJpKey.Trim().ToLowerInvariant().Replace("-", "").Replace(" ", "");
+            filtered = filtered.Where(r => r.JpKey.ToLowerInvariant().Replace("-", "").Replace(" ", "").Contains(cleanKey));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterVendor))
+        {
+            var vTerm = FilterVendor.Trim().ToLowerInvariant();
+            filtered = filtered.Where(r => r.VendorName != null && r.VendorName.ToLowerInvariant().Contains(vTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterPackingSlip))
+        {
+            var psTerm = FilterPackingSlip.Trim().ToLowerInvariant();
+            filtered = filtered.Where(r => r.PackingSlipNumber != null && r.PackingSlipNumber.ToLowerInvariant().Contains(psTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(FilterDate))
+        {
+            var dTerm = FilterDate.Trim().ToLowerInvariant();
+            filtered = filtered.Where(r =>
+                r.ArrivalDateTime.ToString("yyyy-MM-dd").Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("MMM d, yyyy").ToLowerInvariant().Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("MM/dd/yyyy").Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("MM-dd-yyyy").Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("MMMM d, yyyy").ToLowerInvariant().Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("ddd").ToLowerInvariant().Contains(dTerm) ||
+                r.ArrivalDateTime.ToString("yyyy").Contains(dTerm));
+        }
+
+        // Keep the original search fields looking through the filtered results from the other fields
         if (!string.IsNullOrWhiteSpace(SearchTerm))
         {
             var term = SearchTerm.Trim().ToLowerInvariant();

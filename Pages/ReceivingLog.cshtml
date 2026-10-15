@@ -232,14 +232,26 @@
     </div>
 </div>
 
+@{
+    var hasActiveReceivingFilters = !string.IsNullOrEmpty(Model.SearchTerm) 
+        || !string.IsNullOrEmpty(Model.StagingFilter) 
+        || !string.IsNullOrEmpty(Model.LoadTypeFilter) 
+        || (Model.StatusFilter != "active" && !string.IsNullOrEmpty(Model.StatusFilter))
+        || !string.IsNullOrEmpty(Model.FilterJpKey)
+        || !string.IsNullOrEmpty(Model.FilterVendor)
+        || !string.IsNullOrEmpty(Model.FilterPackingSlip)
+        || !string.IsNullOrEmpty(Model.FilterDate);
+}
+
 <!-- Toolbar: Search, Filters & Grouping Toggle -->
 <div class="hs-toolbar px-3 py-2 mt-3">
-    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100" id="receivingLogFilterForm">
+        <!-- Row 1: Search, Grouping, Dropdowns, Apply, Clear -->
         <div class="d-flex flex-wrap align-items-center gap-2">
             <!-- Search Input -->
             <div class="hs-search-box position-relative" style="min-width: 320px;">
                 <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
-                <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
+                <input type="text" name="SearchTerm" id="recSearchTermInput" value="@Model.SearchTerm" 
                        class="form-control form-control-sm ps-4" 
                        placeholder="Search JP Key, Job#, PO#, Vendor, BOL..." />
             </div>
@@ -297,10 +309,10 @@
                 <i class="bi bi-funnel"></i> Apply
             </button>
 
-            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.StagingFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter))
+            @if (hasActiveReceivingFilters)
             {
-                <a asp-page="/ReceivingLog" asp-route-GroupBy="@Model.GroupBy" class="text-decoration-none text-danger small ms-1">
-                    <i class="bi bi-x-circle"></i> Clear
+                <a asp-page="/ReceivingLog" asp-route-GroupBy="@Model.GroupBy" class="text-decoration-none text-danger small ms-1" id="recClearAllBtn" onclick="clearRecLiveFilters()">
+                    <i class="bi bi-x-circle"></i> Clear filters
                 </a>
             }
         </div>
@@ -309,6 +321,54 @@
             <span class="text-muted small" id="toolbarSortNotice">
                 Order within groups: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>
             </span>
+        </div>
+
+        <!-- Row 2: Text Filter Fields for JP Key, Vendor, Packing Slip, and Date -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100 pt-2 border-top mt-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <span class="text-muted small fw-semibold me-1"><i class="bi bi-funnel-fill text-primary me-1"></i>Column Filters:</span>
+                
+                <div class="position-relative" style="min-width: 145px; max-width: 170px;">
+                    <i class="bi bi-key position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterJpKey" id="recFilterJpKey" value="@Model.FilterJpKey" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter JP Key..." title="Filter by JP Key (e.g. 251078C0123)" />
+                </div>
+
+                <div class="position-relative" style="min-width: 155px; max-width: 180px;">
+                    <i class="bi bi-building position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterVendor" id="recFilterVendor" value="@Model.FilterVendor" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Vendor..." title="Filter by Vendor Name" />
+                </div>
+
+                <div class="position-relative" style="min-width: 165px; max-width: 190px;">
+                    <i class="bi bi-receipt position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterPackingSlip" id="recFilterPackingSlip" value="@Model.FilterPackingSlip" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Packing Slip..." title="Filter by Packing Slip #" />
+                </div>
+
+                <div class="position-relative" style="min-width: 155px; max-width: 180px;">
+                    <i class="bi bi-calendar-event position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size: 11px;"></i>
+                    <input type="text" name="FilterDate" id="recFilterDate" value="@Model.FilterDate" 
+                           class="form-control form-control-sm ps-4" placeholder="Filter Date..." title="Filter by Landed Date (e.g. Oct 8, 2026, 10/08)" />
+                </div>
+
+                <button type="submit" class="btn btn-sm btn-outline-primary py-1">
+                    <i class="bi bi-search"></i> Filter
+                </button>
+
+                @if (hasActiveReceivingFilters)
+                {
+                    <a asp-page="/ReceivingLog" asp-route-GroupBy="@Model.GroupBy" class="btn btn-sm btn-outline-danger py-1" onclick="clearRecLiveFilters()">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </a>
+                }
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border small" id="recLiveMatchCounterBadge">
+                    <i class="bi bi-check2-circle text-success me-1"></i><span id="recLiveMatchCount">Showing @Model.TotalLandedCount shipments</span>
+                </span>
+            </div>
         </div>
     </form>
 </div>
@@ -426,6 +486,7 @@
                                     data-packages="@item.PackageSummary"
                                     data-loadtype="@item.LoadType"
                                     data-staging="@item.StagingLocation"
+                                    data-date="@item.ArrivalDateTime.ToString("yyyy-MM-dd MMM d, yyyy MM/dd/yyyy dddd MMMM")"
                                     data-arrival="@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")"
                                     data-arrival-ts="@item.ArrivalDateTime.Ticks"
                                     data-status="@item.Status"
@@ -1245,9 +1306,102 @@
         };
     }
 
+    function initReceivingLiveFiltering() {
+        var searchInput = document.getElementById('recSearchTermInput');
+        var jpInput = document.getElementById('recFilterJpKey');
+        var vendorInput = document.getElementById('recFilterVendor');
+        var slipInput = document.getElementById('recFilterPackingSlip');
+        var dateInput = document.getElementById('recFilterDate');
+
+        function applyLiveFilters() {
+            var searchVal = (searchInput?.value || '').trim().toLowerCase();
+            var searchValClean = searchVal.replace(/[- ]/g, '');
+
+            var jpVal = (jpInput?.value || '').trim().toLowerCase().replace(/[- ]/g, '');
+            var vendorVal = (vendorInput?.value || '').trim().toLowerCase();
+            var slipVal = (slipInput?.value || '').trim().toLowerCase();
+            var dateVal = (dateInput?.value || '').trim().toLowerCase();
+
+            var totalVisible = 0;
+            var allRows = document.querySelectorAll('tr.rec-log-row');
+
+            allRows.forEach(function(row) {
+                var rJp = (row.dataset.jpkey || '').toLowerCase().replace(/[- ]/g, '');
+                var rJob = (row.dataset.job || '').toLowerCase();
+                var rPo = (row.dataset.po || '').toLowerCase();
+                var rVendor = (row.dataset.vendor || '').toLowerCase();
+                var rSlip = (row.dataset.slip || '').toLowerCase();
+                var rBol = (row.dataset.bol || '').toLowerCase();
+                var rLoadType = (row.dataset.loadtype || '').toLowerCase();
+                var rStaging = (row.dataset.staging || '').toLowerCase();
+                var rDate = (row.dataset.date || row.dataset.arrival || '').toLowerCase();
+
+                // 1. Check specific column text filters first
+                var matchJp = !jpVal || rJp.indexOf(jpVal) !== -1;
+                var matchVendor = !vendorVal || rVendor.indexOf(vendorVal) !== -1;
+                var matchSlip = !slipVal || rSlip.indexOf(slipVal) !== -1;
+                var matchDate = !dateVal || rDate.indexOf(dateVal) !== -1;
+
+                var passesFieldFilters = matchJp && matchVendor && matchSlip && matchDate;
+
+                // 2. Keep the original search fields looking through the filtered results from the other fields
+                var matchSearch = true;
+                if (passesFieldFilters && searchVal) {
+                    matchSearch = rJp.indexOf(searchValClean) !== -1 ||
+                                  rJob.indexOf(searchVal) !== -1 ||
+                                  rPo.indexOf(searchVal) !== -1 ||
+                                  rVendor.indexOf(searchVal) !== -1 ||
+                                  rSlip.indexOf(searchVal) !== -1 ||
+                                  rBol.indexOf(searchVal) !== -1 ||
+                                  rLoadType.indexOf(searchVal) !== -1 ||
+                                  rStaging.indexOf(searchVal) !== -1 ||
+                                  rDate.indexOf(searchVal) !== -1;
+                }
+
+                if (passesFieldFilters && matchSearch) {
+                    row.style.display = '';
+                    totalVisible++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update group cards visibility if all rows inside are hidden
+            document.querySelectorAll('.card.border-0.shadow-sm.rounded-3.mb-4').forEach(function(card) {
+                var cardRows = card.querySelectorAll('tr.rec-log-row');
+                if (cardRows.length > 0) {
+                    var anyVisible = Array.from(cardRows).some(function(r) { return r.style.display !== 'none'; });
+                    card.style.display = anyVisible ? '' : 'none';
+                }
+            });
+
+            // Update match count badge
+            var countSpan = document.getElementById('recLiveMatchCount');
+            if (countSpan) {
+                countSpan.textContent = 'Showing ' + totalVisible + ' shipment' + (totalVisible === 1 ? '' : 's');
+            }
+        }
+
+        [searchInput, jpInput, vendorInput, slipInput, dateInput].forEach(function(input) {
+            if (input) {
+                input.addEventListener('input', applyLiveFilters);
+            }
+        });
+
+        window.clearRecLiveFilters = function() {
+            if (searchInput) searchInput.value = '';
+            if (jpInput) jpInput.value = '';
+            if (vendorInput) vendorInput.value = '';
+            if (slipInput) slipInput.value = '';
+            if (dateInput) dateInput.value = '';
+            applyLiveFilters();
+        };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         initJobSearchableDropdown();
         initTableSorting();
+        initReceivingLiveFiltering();
     });
 
     function exportReceivingLogToCsv() {
