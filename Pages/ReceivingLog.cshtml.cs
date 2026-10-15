@@ -48,6 +48,9 @@ public class ReceivingLogModel : PageModel
     public List<ReceivingLogEntry> AdminPendingShipments { get; set; } = new();
     public List<ReceivingLogEntry> AdminInspectionApprovalQueue { get; set; } = new();
 
+    // Flat Entries List
+    public List<ReceivingLogEntry> Items { get; set; } = new();
+
     // Grouped Entries
     public List<ReceivingGroupViewModel> Groups { get; set; } = new();
 
@@ -214,8 +217,13 @@ public class ReceivingLogModel : PageModel
             filtered = filtered.Where(r => r.LoadType.Equals(LoadTypeFilter, StringComparison.OrdinalIgnoreCase));
         }
 
-        // 4. Grouping & Sorting Logic:
-        // Group similar load types together, then order within group by JP Key -> Job # -> Staging Location
+        // 4. Flat items list and fallback grouping
+        Items = filtered
+            .OrderBy(i => i.JpKey)
+            .ThenBy(i => i.JobNumber ?? "ZZZZZ")
+            .ThenBy(i => i.StagingLocation)
+            .ToList();
+
         Groups = BuildGroups(filtered, GroupBy);
     }
 

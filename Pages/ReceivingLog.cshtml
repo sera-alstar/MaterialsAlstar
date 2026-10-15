@@ -62,187 +62,7 @@
     </div>
 </div>
 
-<!-- Materials Admin Inspection Review Queue (Inspected shipments awaiting Admin Audit before posting to Materials Inventory) -->
-@if (Model.AdminInspectionApprovalQueue.Count > 0)
-{
-    <div class="px-3 pt-3">
-        <div class="card border-primary shadow-sm rounded-3 overflow-hidden">
-            <div class="card-header bg-primary text-white border-bottom border-primary d-flex align-items-center justify-content-between py-2 px-3">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-shield-check fs-5"></i>
-                    <div>
-                        <strong class="fs-6">Materials Admin Inspection Review Queue</strong>
-                        <span class="badge bg-white text-primary rounded-pill ms-2">@Model.AdminInspectionApprovalQueue.Count shipments awaiting admin audit</span>
-                    </div>
-                </div>
-                <span class="text-white-50 small">
-                    Physical count completed &bull; Review HT#s, Serial#s &amp; approve into Job 251078 Materials Inventory
-                </span>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                    <thead class="table-light">
-                        <tr>
-                            <th>JP Key</th>
-                            <th>Job #</th>
-                            <th>PO #</th>
-                            <th>Vendor</th>
-                            <th>Packing Slip / BOL</th>
-                            <th>Load Type</th>
-                            <th>Staging</th>
-                            <th>Inspector</th>
-                            <th>Timing &amp; Duration</th>
-                            <th>Inspector Notes</th>
-                            <th style="text-align: right;">Admin Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in Model.AdminInspectionApprovalQueue)
-                        {
-                            <tr>
-                                <td><span class="badge bg-dark font-monospace fw-bold fs-6">@p.JpKey</span></td>
-                                <td><span class="hs-badge-job">@(p.JobNumber ?? "251078")</span></td>
-                                <td><span class="font-monospace fw-bold text-dark">@p.PoNumber</span></td>
-                                <td class="fw-bold">@p.VendorName</td>
-                                <td>
-                                    <div class="font-monospace small">PS: @p.PackingSlipNumber</div>
-                                    <div class="font-monospace text-muted" style="font-size: 11px;">BOL: @p.BolNumber</div>
-                                </td>
-                                <td><span class="badge bg-light text-dark border">@p.LoadType</span></td>
-                                <td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">📍 @p.StagingLocation</span></td>
-                                <td>
-                                    <span class="fw-semibold text-dark"><i class="bi bi-person me-1"></i>@(p.ReceiverName ?? "Receiver")</span>
-                                </td>
-                                <td>
-                                    <div class="small fw-semibold text-dark">Submitted: @(p.ReceiveEndTime?.ToString("MMM d, h:mm tt") ?? "--")</div>
-                                    @if (p.ReceiveStartTime.HasValue && p.ReceiveEndTime.HasValue)
-                                    {
-                                        var duration = p.ReceiveEndTime.Value - p.ReceiveStartTime.Value;
-                                        <div class="text-muted" style="font-size: 11px;">Inspection time: @((int)Math.Max(1, duration.TotalMinutes)) mins</div>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="text-truncate" style="max-width: 160px;" title="@p.InspectionNotes">
-                                        @(string.IsNullOrWhiteSpace(p.InspectionNotes) ? "--" : p.InspectionNotes)
-                                    </div>
-                                </td>
-                                <td style="text-align: right;">
-                                    <button type="button" class="btn btn-sm btn-primary fw-bold"
-                                            onclick="openAdminReviewModal(@p.Id, '@p.JpKey', '@p.PoNumber', '@Html.Raw(p.VendorName)', '@(p.JobNumber ?? "251078")')">
-                                        <i class="bi bi-shield-check me-1"></i> Review &amp; Approve
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-}
 
-<!-- Materials Admin Verification Queue (Alert Section for Ad-Hoc / Unscheduled Shipments) -->
-@if (Model.AdminPendingShipments.Count > 0)
-{
-    <div class="px-3 pt-3">
-        <div class="card border-warning shadow-sm rounded-3 overflow-hidden">
-            <div class="card-header bg-warning-subtle text-dark border-bottom border-warning d-flex align-items-center justify-content-between py-2 px-3">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-shield-lock-fill text-warning fs-5"></i>
-                    <div>
-                        <strong class="fs-6">Materials Admin Verification Queue</strong>
-                        <span class="badge bg-warning text-dark rounded-pill ms-2">@Model.AdminPendingShipments.Count shipments awaiting review</span>
-                    </div>
-                </div>
-                <span class="text-muted small">
-                    Unscheduled or client-supplied arrivals must be verified before official receiving
-                </span>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Arrived</th>
-                            <th>Temporary Key</th>
-                            <th>Vendor</th>
-                            <th>PO #</th>
-                            <th>Job # (Status)</th>
-                            <th>Packing Slip / BOL</th>
-                            <th>Packages</th>
-                            <th>Load Type</th>
-                            <th>Staging</th>
-                            <th>Photo</th>
-                            <th>Notes</th>
-                            <th style="text-align: right;">Admin Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in Model.AdminPendingShipments)
-                        {
-                            <tr>
-                                <td>@p.ArrivalDateTime.ToString("MMM d, h:mm tt")</td>
-                                <td><span class="badge bg-secondary font-monospace">@p.JpKey</span></td>
-                                <td class="fw-bold">@p.VendorName</td>
-                                <td class="font-monospace">@p.PoNumber</td>
-                                <td>
-                                    @if (string.IsNullOrEmpty(p.JobNumber))
-                                    {
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
-                                            <i class="bi bi-question-circle me-1"></i> Missing / Client Supplied
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-dark-subtle text-dark">@p.JobNumber</span>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="font-monospace small">PS: @p.PackingSlipNumber</div>
-                                    <div class="font-monospace text-muted" style="font-size: 11px;">BOL: @p.BolNumber</div>
-                                </td>
-                                <td>@p.PackageSummary</td>
-                                <td><span class="badge bg-light text-dark border">@p.LoadType</span></td>
-                                <td><span class="badge bg-info-subtle text-dark">📍 @p.StagingLocation</span></td>
-                                <td>
-                                    @if (!string.IsNullOrEmpty(p.PhotoPath))
-                                    {
-                                        <a href="@p.PhotoPath" target="_blank" title="View shipment photo">
-                                            <img src="@p.PhotoPath" class="rounded border" style="width: 38px; height: 38px; object-fit: cover;" alt="Photo" />
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted fst-italic" style="font-size: 11px;">No photo</span>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="text-truncate" style="max-width: 150px;" title="@p.Notes">
-                                        @p.Notes
-                                    </div>
-                                </td>
-                                <td style="text-align: right;">
-                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold"
-                                            data-id="@p.Id"
-                                            data-po="@p.PoNumber"
-                                            data-vendor="@p.VendorName"
-                                            data-job="@(p.JobNumber ?? "")"
-                                            data-slip="@p.PackingSlipNumber"
-                                            data-bol="@p.BolNumber"
-                                            data-loadtype="@p.LoadType"
-                                            data-staging="@p.StagingLocation"
-                                            data-notes="@(p.Notes ?? "")"
-                                            onclick="openAdminVerifyModalFromBtn(this)">
-                                        <i class="bi bi-pencil-square me-1"></i> Review &amp; Verify
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-}
 
 <!-- KPI Cards -->
 <div class="px-3 pt-3">
@@ -317,7 +137,200 @@
     </div>
 </div>
 
-<!-- Toolbar: Search, Filters & Grouping Toggle -->
+<!-- Collapsible Materials Admin Queues -->
+@if (Model.TotalAdminInspectionCount > 0 || Model.TotalAdminPendingCount > 0)
+{
+    <div class="px-3 pt-3">
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-2 px-3 cursor-pointer"
+                 data-bs-toggle="collapse" data-bs-target="#adminQueuesCollapse" role="button" aria-expanded="false" aria-controls="adminQueuesCollapse"
+                 style="cursor: pointer;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-lock-fill text-warning fs-5"></i>
+                    <div>
+                        <strong class="fs-6">Materials Admin Queues</strong>
+                        @if (Model.TotalAdminInspectionCount > 0)
+                        {
+                            <span class="badge bg-primary text-white rounded-pill ms-2">@Model.TotalAdminInspectionCount audit review</span>
+                        }
+                        @if (Model.TotalAdminPendingCount > 0)
+                        {
+                            <span class="badge bg-warning text-dark rounded-pill ms-1">@Model.TotalAdminPendingCount check-in verification</span>
+                        }
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 text-muted small">
+                    <span>Click to toggle</span>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+            </div>
+            <div class="collapse" id="adminQueuesCollapse">
+                <div class="card-body p-0">
+                    @if (Model.AdminInspectionApprovalQueue.Count > 0)
+                    {
+                        <div class="border-bottom">
+                            <div class="bg-primary-subtle text-primary-emphasis px-3 py-2 d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-patch-check-fill text-primary"></i>
+                                    <span class="fw-bold small text-uppercase">Inspection Review &amp; QA Queue</span>
+                                    <span class="badge bg-primary text-white rounded-pill">@Model.AdminInspectionApprovalQueue.Count</span>
+                                </div>
+                                <span class="small text-muted">Field inspector submitted counts &amp; Heat #s awaiting approval</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>JP Key</th>
+                                            <th>Vendor</th>
+                                            <th>PO #</th>
+                                            <th>Job #</th>
+                                            <th>Inspector</th>
+                                            <th>Inspection Time</th>
+                                            <th>Notes / Issues</th>
+                                            <th style="text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var p in Model.AdminInspectionApprovalQueue)
+                                        {
+                                            <tr>
+                                                <td><span class="badge bg-dark font-monospace">@p.JpKey</span></td>
+                                                <td class="fw-bold">@p.VendorName</td>
+                                                <td class="font-monospace">@p.PoNumber</td>
+                                                <td><span class="badge bg-secondary-subtle text-secondary font-monospace">@(p.JobNumber ?? "Client Supplied")</span></td>
+                                                <td>
+                                                    <span class="fw-semibold text-dark"><i class="bi bi-person me-1"></i>@(p.ReceiverName ?? "Receiver")</span>
+                                                </td>
+                                                <td>
+                                                    <div class="small fw-semibold text-dark">Submitted: @(p.ReceiveEndTime?.ToString("MMM d, h:mm tt") ?? "--")</div>
+                                                    @if (p.ReceiveStartTime.HasValue && p.ReceiveEndTime.HasValue)
+                                                    {
+                                                        var duration = p.ReceiveEndTime.Value - p.ReceiveStartTime.Value;
+                                                        <div class="text-muted" style="font-size: 11px;">Inspection time: @((int)Math.Max(1, duration.TotalMinutes)) mins</div>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="text-truncate" style="max-width: 160px;" title="@p.InspectionNotes">
+                                                        @(string.IsNullOrWhiteSpace(p.InspectionNotes) ? "--" : p.InspectionNotes)
+                                                    </div>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <button type="button" class="btn btn-sm btn-primary fw-bold"
+                                                            onclick="openAdminReviewModal(@p.Id, '@p.JpKey', '@p.PoNumber', '@Html.Raw(p.VendorName)', '@(p.JobNumber ?? "251078")')">
+                                                        <i class="bi bi-shield-check me-1"></i> Review &amp; Approve
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    @if (Model.AdminPendingShipments.Count > 0)
+                    {
+                        <div>
+                            <div class="bg-warning-subtle text-warning-emphasis px-3 py-2 d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                    <span class="fw-bold small text-uppercase">Check-In Verification Queue (Ad-Hoc / Unscheduled)</span>
+                                    <span class="badge bg-warning text-dark rounded-pill">@Model.AdminPendingShipments.Count</span>
+                                </div>
+                                <span class="small text-muted">Unscheduled or client-supplied arrivals must be verified before official receiving</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Arrived</th>
+                                            <th>Temporary Key</th>
+                                            <th>Vendor</th>
+                                            <th>PO #</th>
+                                            <th>Job # (Status)</th>
+                                            <th>Packing Slip / BOL</th>
+                                            <th>Packages</th>
+                                            <th>Load Type</th>
+                                            <th>Staging</th>
+                                            <th>Photo</th>
+                                            <th>Notes</th>
+                                            <th style="text-align: right;">Admin Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var p in Model.AdminPendingShipments)
+                                        {
+                                            <tr>
+                                                <td>@p.ArrivalDateTime.ToString("MMM d, h:mm tt")</td>
+                                                <td><span class="badge bg-secondary font-monospace">@p.JpKey</span></td>
+                                                <td class="fw-bold">@p.VendorName</td>
+                                                <td class="font-monospace">@p.PoNumber</td>
+                                                <td>
+                                                    @if (string.IsNullOrEmpty(p.JobNumber))
+                                                    {
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                                            <i class="bi bi-question-circle me-1"></i> Missing / Client Supplied
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-dark-subtle text-dark">@p.JobNumber</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="font-monospace small">PS: @p.PackingSlipNumber</div>
+                                                    <div class="font-monospace text-muted" style="font-size: 11px;">BOL: @p.BolNumber</div>
+                                                </td>
+                                                <td>@p.PackageSummary</td>
+                                                <td><span class="badge bg-light text-dark border">@p.LoadType</span></td>
+                                                <td><span class="badge bg-info-subtle text-dark">📍 @p.StagingLocation</span></td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(p.PhotoPath))
+                                                    {
+                                                        <a href="@p.PhotoPath" target="_blank" title="View shipment photo">
+                                                            <img src="@p.PhotoPath" class="rounded border" style="width: 38px; height: 38px; object-fit: cover;" alt="Photo" />
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted fst-italic" style="font-size: 11px;">No photo</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="text-truncate" style="max-width: 150px;" title="@p.Notes">
+                                                        @p.Notes
+                                                    </div>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold"
+                                                            data-id="@p.Id"
+                                                            data-po="@p.PoNumber"
+                                                            data-vendor="@p.VendorName"
+                                                            data-job="@(p.JobNumber ?? "")"
+                                                            data-slip="@p.PackingSlipNumber"
+                                                            data-bol="@p.BolNumber"
+                                                            data-loadtype="@p.LoadType"
+                                                            data-staging="@p.StagingLocation"
+                                                            data-notes="@(p.Notes ?? "")"
+                                                            onclick="openAdminVerifyModalFromBtn(this)">
+                                                        <i class="bi bi-pencil-square me-1"></i> Review &amp; Verify
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Toolbar: Search & Filters -->
 <div class="hs-toolbar px-3 py-2 mt-3">
     <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
         <div class="d-flex flex-wrap align-items-center gap-2">
@@ -327,30 +340,6 @@
                 <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
                        class="form-control form-control-sm ps-4" 
                        placeholder="Search JP Key, Job#, PO#, Vendor, BOL..." />
-            </div>
-
-            <!-- Grouping Switcher Buttons (Primary Workflow Feature) -->
-            <div class="btn-group btn-group-sm" role="group">
-                <button type="submit" name="GroupBy" value="loadtype" 
-                        class="btn @(Model.GroupBy == "loadtype" ? "btn-primary text-white" : "btn-outline-secondary")"
-                        title="Group similar items (SNG, Pipe, Valves) together for concurrent receiving">
-                    <i class="bi bi-collection me-1"></i> Group by Load Type
-                </button>
-                <button type="submit" name="GroupBy" value="staging" 
-                        class="btn @(Model.GroupBy == "staging" ? "btn-primary text-white" : "btn-outline-secondary")"
-                        title="Group by yard location (Walkway, Bay 1) to receive adjacent shipments">
-                    <i class="bi bi-geo-alt me-1"></i> Group by Location
-                </button>
-                <button type="submit" name="GroupBy" value="job" 
-                        class="btn @(Model.GroupBy == "job" ? "btn-primary text-white" : "btn-outline-secondary")"
-                        title="Group by Job # for project package fulfillment">
-                    <i class="bi bi-briefcase me-1"></i> Group by Job #
-                </button>
-                <button type="submit" name="GroupBy" value="flat" 
-                        class="btn @(Model.GroupBy == "flat" ? "btn-primary text-white" : "btn-outline-secondary")"
-                        title="Flat table sorted by JP Key">
-                    <i class="bi bi-list-ul me-1"></i> All
-                </button>
             </div>
 
             <!-- Staging Location Filter Dropdown -->
@@ -384,7 +373,7 @@
 
             @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.StagingFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter))
             {
-                <a asp-page="/ReceivingLog" asp-route-GroupBy="@Model.GroupBy" class="text-decoration-none text-danger small ms-1">
+                <a asp-page="/ReceivingLog" class="text-decoration-none text-danger small ms-1">
                     <i class="bi bi-x-circle"></i> Clear
                 </a>
             }
@@ -392,15 +381,15 @@
 
         <div class="d-flex align-items-center gap-2">
             <span class="text-muted small" id="toolbarSortNotice">
-                Order within groups: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>
+                Default order: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>
             </span>
         </div>
     </form>
 </div>
 
-<!-- Main Grouped Receiving Log Content -->
+<!-- Main Receiving Log Flat Table Content -->
 <div class="px-3 pb-5">
-    @if (Model.Groups.Count == 0 || Model.Groups.All(g => g.Items.Count == 0))
+    @if (Model.Items.Count == 0)
     {
         <div class="hs-table-container rounded-3 p-5 text-center bg-white shadow-sm">
             <i class="bi bi-inbox fs-1 text-secondary mb-2 d-block"></i>
@@ -413,288 +402,262 @@
     }
     else
     {
-        @foreach (var group in Model.Groups.Where(g => g.Items.Count > 0))
-        {
-            <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden bg-white">
-                <!-- Group Header -->
-                <div class="p-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 bg-light">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="badge @group.BadgeClass fs-6 px-2 py-1">
-                            <i class="bi @group.IconClass me-1"></i> @group.GroupTitle
-                        </span>
-                        <div class="d-flex align-items-center gap-2 small text-muted">
-                            <span class="fw-bold text-dark">@group.TotalShipments</span> shipments &bull;
-                            <span>@group.TotalPallets Pallets</span> &bull;
-                            <span>@group.TotalCrates Crates</span> &bull;
-                            <span>@group.TotalBoxes Boxes</span>
-                        </div>
-                    </div>
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white">
+            <div class="table-responsive">
+                <table class="hs-table align-middle mb-0" id="receivingLogTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 140px;">JP Key</th>
+                            <th style="width: 105px;">Job #</th>
+                            <th style="width: 105px;" class="sortable-col" data-sort-key="po" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>PO #</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th class="sortable-col" data-sort-key="vendor" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Vendor</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th class="sortable-col" data-sort-key="slip" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Packing Slip #</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th class="sortable-col" data-sort-key="bol" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>BOL #</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th>Packages</th>
+                            <th class="sortable-col" data-sort-key="loadtype" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Load Type</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th style="width: 175px;" class="sortable-col" data-sort-key="staging" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Staging Location</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th style="width: 145px;" class="sortable-col" data-sort-key="arrival" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Landed Time</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th style="width: 65px;">Photo</th>
+                            <th style="width: 140px;" class="sortable-col" data-sort-key="status" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Status</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th style="width: 120px; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr class="rec-log-row"
+                                data-id="@item.Id"
+                                data-jpkey="@item.JpKey"
+                                data-job="@(item.JobNumber ?? "Client Supplied")"
+                                data-po="@item.PoNumber"
+                                data-vendor="@item.VendorName"
+                                data-slip="@item.PackingSlipNumber"
+                                data-bol="@item.BolNumber"
+                                data-packages="@item.PackageSummary"
+                                data-loadtype="@item.LoadType"
+                                data-staging="@item.StagingLocation"
+                                data-arrival="@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")"
+                                data-arrival-ts="@item.ArrivalDateTime.Ticks"
+                                data-status="@item.Status"
+                                data-receiver="@(item.ReceiverName ?? "Unassigned")"
+                                data-unloader="@(item.Unloader ?? "--")"
+                                data-mrr="@(item.MrrNumber ?? "--")"
+                                data-recid="@(item.RecId ?? "--")"
+                                data-matmtr="@(item.MaterialsMtrCheck ?? "--")"
+                                data-matmtrcomm="@(item.MaterialsMtrComments ?? "")"
+                                data-qcmtr="@(item.QcMtrCheck ?? "--")"
+                                data-qcmtrcomm="@(item.QcMtrComments ?? "")"
+                                data-doclink="@(item.DocumentLink ?? "")"
+                                data-notes="@(item.Notes ?? "")"
+                                data-photo="@(item.PhotoPath ?? "")"
+                                onclick="openReceivingDrawerFromRow(this)"
+                                style="cursor: pointer;">
+                                <!-- JP Key -->
+                                <td>
+                                    <span class="badge bg-dark font-monospace fw-bold fs-6">@item.JpKey</span>
+                                    @if (!string.IsNullOrEmpty(item.ClientName))
+                                    {
+                                        <div class="text-muted" style="font-size: 11px;">@item.ClientName</div>
+                                    }
+                                </td>
 
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-secondary-subtle text-secondary border small group-order-badge">
-                            <i class="bi bi-sort-numeric-down me-1"></i> Ordered by JP Key &bull; Job # &bull; Staging
-                        </span>
-                    </div>
-                </div>
+                                <!-- Job # -->
+                                <td>
+                                    @if (string.IsNullOrEmpty(item.JobNumber))
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">Client Supp.</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="hs-badge-job">@item.JobNumber</span>
+                                    }
+                                </td>
 
-                <!-- Group Table -->
-                <div class="table-responsive">
-                    <table class="hs-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width: 140px;">JP Key</th>
-                                <th style="width: 105px;">Job #</th>
-                                <th style="width: 105px;" class="sortable-col" data-sort-key="po" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>PO #</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th class="sortable-col" data-sort-key="vendor" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Vendor</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th class="sortable-col" data-sort-key="slip" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Packing Slip #</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th class="sortable-col" data-sort-key="bol" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>BOL #</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th>Packages</th>
-                                <th class="sortable-col" data-sort-key="loadtype" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Load Type</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th style="width: 175px;" class="sortable-col" data-sort-key="staging" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Staging Location</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th style="width: 145px;" class="sortable-col" data-sort-key="arrival" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Landed Time</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th style="width: 65px;">Photo</th>
-                                <th style="width: 140px;" class="sortable-col" data-sort-key="status" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span>Status</span>
-                                        <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
-                                    </div>
-                                </th>
-                                <th style="width: 120px; text-align: right;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in group.Items)
-                            {
-                                <tr class="rec-log-row"
-                                    data-id="@item.Id"
-                                    data-jpkey="@item.JpKey"
-                                    data-job="@(item.JobNumber ?? "Client Supplied")"
-                                    data-po="@item.PoNumber"
-                                    data-vendor="@item.VendorName"
-                                    data-slip="@item.PackingSlipNumber"
-                                    data-bol="@item.BolNumber"
-                                    data-packages="@item.PackageSummary"
-                                    data-loadtype="@item.LoadType"
-                                    data-staging="@item.StagingLocation"
-                                    data-arrival="@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")"
-                                    data-arrival-ts="@item.ArrivalDateTime.Ticks"
-                                    data-status="@item.Status"
-                                    data-receiver="@(item.ReceiverName ?? "Unassigned")"
-                                    data-unloader="@(item.Unloader ?? "--")"
-                                    data-mrr="@(item.MrrNumber ?? "--")"
-                                    data-recid="@(item.RecId ?? "--")"
-                                    data-matmtr="@(item.MaterialsMtrCheck ?? "--")"
-                                    data-matmtrcomm="@(item.MaterialsMtrComments ?? "")"
-                                    data-qcmtr="@(item.QcMtrCheck ?? "--")"
-                                    data-qcmtrcomm="@(item.QcMtrComments ?? "")"
-                                    data-doclink="@(item.DocumentLink ?? "")"
-                                    data-notes="@(item.Notes ?? "")"
-                                    data-photo="@(item.PhotoPath ?? "")"
-                                    onclick="openReceivingDrawerFromRow(this)"
-                                    style="cursor: pointer;">
-                                    <!-- JP Key -->
-                                    <td>
-                                        <span class="badge bg-dark font-monospace fw-bold fs-6">@item.JpKey</span>
-                                        @if (!string.IsNullOrEmpty(item.ClientName))
-                                        {
-                                            <div class="text-muted" style="font-size: 11px;">@item.ClientName</div>
-                                        }
-                                    </td>
+                                <!-- PO # -->
+                                <td>
+                                    <span class="fw-bold font-monospace text-dark">@item.PoNumber</span>
+                                </td>
 
-                                    <!-- Job # -->
-                                    <td>
-                                        @if (string.IsNullOrEmpty(item.JobNumber))
-                                        {
-                                            <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">Client Supp.</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="hs-badge-job">@item.JobNumber</span>
-                                        }
-                                    </td>
+                                <!-- Vendor -->
+                                <td>
+                                    <div class="fw-semibold text-dark">@item.VendorName</div>
+                                </td>
 
-                                    <!-- PO # -->
-                                    <td>
-                                        <span class="fw-bold font-monospace text-dark">@item.PoNumber</span>
-                                    </td>
+                                <!-- Packing Slip # -->
+                                <td>
+                                    <span class="badge bg-light text-dark border font-monospace">@item.PackingSlipNumber</span>
+                                </td>
 
-                                    <!-- Vendor -->
-                                    <td>
-                                        <div class="fw-semibold text-dark">@item.VendorName</div>
-                                    </td>
+                                <!-- BOL # -->
+                                <td>
+                                    <span class="text-muted font-monospace small">@item.BolNumber</span>
+                                </td>
 
-                                    <!-- Packing Slip # -->
-                                    <td>
-                                        <span class="badge bg-light text-dark border font-monospace">@item.PackingSlipNumber</span>
-                                    </td>
+                                <!-- Package Breakdown -->
+                                <td>
+                                    <span class="small fw-semibold text-dark">@item.PackageSummary</span>
+                                </td>
 
-                                    <!-- BOL # -->
-                                    <td>
-                                        <span class="text-muted font-monospace small">@item.BolNumber</span>
-                                    </td>
+                                <!-- Load Type -->
+                                <td>
+                                    <span class="badge bg-light text-dark border small">@item.LoadType</span>
+                                </td>
 
-                                    <!-- Package Breakdown -->
-                                    <td>
-                                        <span class="small fw-semibold text-dark">@item.PackageSummary</span>
-                                    </td>
+                                <!-- Staging Location -->
+                                <td>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">
+                                        📍 @item.StagingLocation
+                                    </span>
+                                </td>
 
-                                    <!-- Load Type -->
-                                    <td>
-                                        <span class="badge bg-light text-dark border small">@item.LoadType</span>
-                                    </td>
+                                <!-- Arrival Time -->
+                                <td>
+                                    <div class="small fw-medium text-dark">@item.ArrivalDateTime.ToString("MMM d, h:mm tt")</div>
+                                </td>
 
-                                    <!-- Staging Location -->
-                                    <td>
-                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">
-                                            📍 @item.StagingLocation
+                                <!-- Photo Thumbnail -->
+                                <td>
+                                    @if (!string.IsNullOrEmpty(item.PhotoPath))
+                                    {
+                                        <a href="@item.PhotoPath" target="_blank" onclick="event.stopPropagation();" title="View full photo">
+                                            <img src="@item.PhotoPath" class="rounded border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;" alt="Photo" />
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted" style="font-size: 11px;">--</span>
+                                    }
+                                </td>
+
+                                <!-- Status -->
+                                <td>
+                                    @if (item.Status == "In Inspection" || item.Status == "Inspecting")
+                                    {
+                                        <span class="badge bg-info-subtle text-dark border border-info-subtle small">
+                                            <i class="bi bi-clipboard-pulse me-1 text-info"></i> Inspecting
                                         </span>
-                                    </td>
+                                        @if (!string.IsNullOrEmpty(item.ReceiverName))
+                                        {
+                                            <div class="text-muted" style="font-size: 10px;">@item.ReceiverName</div>
+                                        }
+                                    }
+                                    else if (item.Status == "Pending Admin Approval")
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning small">
+                                            <i class="bi bi-shield-exclamation me-1 text-warning"></i> Audit Review
+                                        </span>
+                                        @if (!string.IsNullOrEmpty(item.ReceiverName))
+                                        {
+                                            <div class="text-muted" style="font-size: 10px;">By @item.ReceiverName</div>
+                                        }
+                                    }
+                                    else if (item.Status == "Approved - Pending QA")
+                                    {
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                                            <i class="bi bi-patch-check me-1"></i> Approved (Pre-QA)
+                                        </span>
+                                    }
+                                    else if (item.Status == "Complete")
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle small">
+                                            <i class="bi bi-check-all me-1"></i> Received
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning-subtle small">
+                                            <i class="bi bi-geo-alt me-1"></i> In Yard
+                                        </span>
+                                    }
+                                </td>
 
-                                    <!-- Arrival Time -->
-                                    <td>
-                                        <div class="small fw-medium text-dark">@item.ArrivalDateTime.ToString("MMM d, h:mm tt")</div>
-                                    </td>
-
-                                    <!-- Photo Thumbnail -->
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.PhotoPath))
-                                        {
-                                            <a href="@item.PhotoPath" target="_blank" onclick="event.stopPropagation();" title="View full photo">
-                                                <img src="@item.PhotoPath" class="rounded border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;" alt="Photo" />
-                                            </a>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted" style="font-size: 11px;">--</span>
-                                        }
-                                    </td>
-
-                                    <!-- Status -->
-                                    <td>
-                                        @if (item.Status == "In Inspection" || item.Status == "Inspecting")
-                                        {
-                                            <span class="badge bg-info-subtle text-dark border border-info-subtle small">
-                                                <i class="bi bi-clipboard-pulse me-1 text-info"></i> Inspecting
-                                            </span>
-                                            @if (!string.IsNullOrEmpty(item.ReceiverName))
-                                            {
-                                                <div class="text-muted" style="font-size: 10px;">@item.ReceiverName</div>
-                                            }
-                                        }
-                                        else if (item.Status == "Pending Admin Approval")
-                                        {
-                                            <span class="badge bg-warning-subtle text-dark border border-warning small">
-                                                <i class="bi bi-shield-exclamation me-1 text-warning"></i> Audit Review
-                                            </span>
-                                            @if (!string.IsNullOrEmpty(item.ReceiverName))
-                                            {
-                                                <div class="text-muted" style="font-size: 10px;">By @item.ReceiverName</div>
-                                            }
-                                        }
-                                        else if (item.Status == "Approved - Pending QA")
-                                        {
-                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
-                                                <i class="bi bi-patch-check me-1"></i> Approved (Pre-QA)
-                                            </span>
-                                        }
-                                        else if (item.Status == "Complete")
-                                        {
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle small">
-                                                <i class="bi bi-check-all me-1"></i> Received
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-warning-subtle text-dark border border-warning-subtle small">
-                                                <i class="bi bi-geo-alt me-1"></i> In Yard
-                                            </span>
-                                        }
-                                    </td>
-
-                                    <!-- Action -->
-                                    <td style="text-align: right; white-space: nowrap;">
-                                        @if (item.Status == "Pending Admin Approval")
-                                        {
-                                            <button type="button" class="btn btn-sm btn-warning text-dark py-0 px-2 fw-bold"
-                                                    onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
-                                                    title="Admin audit &amp; approval for received materials">
-                                                <i class="bi bi-shield-check me-1"></i> Review
-                                            </button>
-                                        }
-                                        else if (item.Status == "In Inspection" || item.Status == "Inspecting")
-                                        {
-                                            <button type="button" class="btn btn-sm btn-info text-dark py-0 px-2 fw-semibold"
-                                                    onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.ReceiverName ?? "SR Inspector")')"
-                                                    title="Resume physical inspection">
-                                                <i class="bi bi-play-circle me-1"></i> Resume
-                                            </button>
-                                        }
-                                        else if (item.Status == "Approved - Pending QA" || item.Status == "Complete")
-                                        {
-                                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2 fw-semibold"
-                                                    onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
-                                                    title="View inspection records">
-                                                <i class="bi bi-check-circle me-1"></i> View
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold"
-                                                    onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', 'SR Receiver')"
-                                                    title="Start physical inspection">
-                                                <i class="bi bi-clipboard-check me-1"></i> Inspect
-                                            </button>
-                                        }
-                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 ms-1"
-                                                onclick="event.stopPropagation(); openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
-                                            <i class="bi bi-eye"></i>
+                                <!-- Action -->
+                                <td style="text-align: right; white-space: nowrap;">
+                                    @if (item.Status == "Pending Admin Approval")
+                                    {
+                                        <button type="button" class="btn btn-sm btn-warning text-dark py-0 px-2 fw-bold"
+                                                onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
+                                                title="Admin audit &amp; approval for received materials">
+                                            <i class="bi bi-shield-check me-1"></i> Review
                                         </button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                                    }
+                                    else if (item.Status == "In Inspection" || item.Status == "Inspecting")
+                                    {
+                                        <button type="button" class="btn btn-sm btn-info text-dark py-0 px-2 fw-semibold"
+                                                onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.ReceiverName ?? "SR Inspector")')"
+                                                title="Resume physical inspection">
+                                            <i class="bi bi-play-circle me-1"></i> Resume
+                                        </button>
+                                    }
+                                    else if (item.Status == "Approved - Pending QA" || item.Status == "Complete")
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-success py-0 px-2 fw-semibold"
+                                                onclick="event.stopPropagation(); openAdminReviewModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@(item.JobNumber ?? "251078")')"
+                                                title="View inspection records">
+                                            <i class="bi bi-check-circle me-1"></i> View
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold"
+                                                onclick="event.stopPropagation(); openInspectionModal(@item.Id, '@item.JpKey', '@item.PoNumber', '@Html.Raw(item.VendorName)', 'SR Receiver')"
+                                                title="Start physical inspection">
+                                            <i class="bi bi-clipboard-check me-1"></i> Inspect
+                                        </button>
+                                    }
+                                    <button type="button" class="btn btn-sm btn-light border py-0 px-2 ms-1"
+                                            onclick="event.stopPropagation(); openReceivingDrawer(@item.Id, '@item.JpKey', '@(item.JobNumber ?? "Client Supplied")', '@item.PoNumber', '@Html.Raw(item.VendorName)', '@item.PackingSlipNumber', '@item.BolNumber', '@item.PackageSummary', '@item.LoadType', '@item.StagingLocation', '@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")', '@item.Status', '@(item.ReceiverName ?? "Unassigned")', '@Html.Raw(item.Notes ?? "")', '@(item.PhotoPath ?? "")')">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-        }
+        </div>
     }
 </div>
-
 <!-- Slide-Out Drawer for Landed Shipment Details -->
 <div class="hs-drawer-backdrop" id="recDrawerBackdrop" onclick="closeReceivingDrawer()"></div>
 <div class="hs-drawer" id="recDrawer">
@@ -1571,22 +1534,9 @@
                     toolbarNotice.innerHTML = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi ' + dirIcon + ' me-1"></i>Sorted by: <strong>' + (sortLabels[currentSortKey] || currentSortKey) + '</strong> (' + dirText + ')</span> ' +
                         '<button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-1" onclick="window.resetTableSorting()"><i class="bi bi-x-circle me-1"></i>Reset to default order</button>';
                 } else {
-                    toolbarNotice.innerHTML = 'Order within groups: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>';
+                    toolbarNotice.innerHTML = 'Default order: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>';
                 }
             }
-
-            // Update group card badges
-            var groupBadges = document.querySelectorAll('.group-order-badge');
-            groupBadges.forEach(function(badge) {
-                if (currentSortKey && currentSortDir !== 'none') {
-                    var arrow = currentSortDir === 'asc' ? '\u2191' : '\u2193';
-                    badge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle small group-order-badge';
-                    badge.innerHTML = '<i class="bi bi-arrow-down-up me-1"></i> Sorted by ' + (sortLabels[currentSortKey] || currentSortKey) + ' ' + arrow;
-                } else {
-                    badge.className = 'badge bg-secondary-subtle text-secondary border small group-order-badge';
-                    badge.innerHTML = '<i class="bi bi-sort-numeric-down me-1"></i> Ordered by JP Key &bull; Job # &bull; Staging';
-                }
-            });
         }
 
         function applySorting() {
