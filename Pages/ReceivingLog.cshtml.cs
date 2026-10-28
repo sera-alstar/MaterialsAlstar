@@ -34,6 +34,9 @@ public class ReceivingLogModel : PageModel
     public string? LoadTypeFilter { get; set; }
 
     [BindProperty(SupportsGet = true)]
+    public string? EntryStatusFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public string? StatusFilter { get; set; } = "active"; // "active" (landed/inspecting/pending approval), "all", "completed"
 
     // KPIs & Metrics
@@ -57,6 +60,19 @@ public class ReceivingLogModel : PageModel
     // Filter Options
     public List<string> StagingLocationOptions { get; set; } = new();
     public List<string> LoadTypeOptions { get; set; } = new();
+    public List<string> StatusOptions { get; set; } = new();
+
+    public static string GetStatusDisplayName(string? status)
+    {
+        return status switch
+        {
+            "In Inspection" or "Inspecting" => "Inspecting",
+            "Pending Admin Approval" => "Audit Review",
+            "Approved - Pending QA" => "Approved (Pre-QA)",
+            "Complete" => "Received",
+            _ => "In Yard"
+        };
+    }
     public List<JobLookupOption> AvailableJobs { get; set; } = new();
 
     public class JobLookupOption
@@ -172,6 +188,13 @@ public class ReceivingLogModel : PageModel
             .OrderBy(t => t)
             .ToList();
 
+        StatusOptions = allVerified
+            .Select(r => GetStatusDisplayName(r.Status))
+            .Where(s => !string.IsNullOrEmpty(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+
         // Distinct jobs from Receiving Log entries for Admin Verification & Approval Modal
         var rawJobs = await _context.ReceivingLogs
             .Where(r => !string.IsNullOrWhiteSpace(r.JobNumber))
@@ -215,6 +238,13 @@ public class ReceivingLogModel : PageModel
         if (!string.IsNullOrWhiteSpace(LoadTypeFilter))
         {
             filtered = filtered.Where(r => r.LoadType.Equals(LoadTypeFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(EntryStatusFilter))
+        {
+            filtered = filtered.Where(r =>
+                GetStatusDisplayName(r.Status).Equals(EntryStatusFilter, StringComparison.OrdinalIgnoreCase) ||
+                r.Status.Equals(EntryStatusFilter, StringComparison.OrdinalIgnoreCase));
         }
 
         // 4. Flat items list and fallback grouping
@@ -417,7 +447,7 @@ public class ReceivingLogModel : PageModel
 
         TempData["SuccessMessage"] = $"Shipment {entry.JpKey} (PO {entry.PoNumber} - {entry.VendorName}) verified and approved into Receiving Queue at {entry.StagingLocation}.";
 
-        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, EntryStatusFilter, StatusFilter, SearchTerm });
     }
 
     public async Task<IActionResult> OnPostStartInspectionAsync(int entryId, string receiverName)
@@ -432,7 +462,7 @@ public class ReceivingLogModel : PageModel
 
         TempData["SuccessMessage"] = $"Physical receiving started for {entry.JpKey} by {entry.ReceiverName}.";
 
-        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, EntryStatusFilter, StatusFilter, SearchTerm });
     }
 
     public async Task<IActionResult> OnPostUpdateStagingAsync(int entryId, string newStagingLocation)
@@ -445,7 +475,7 @@ public class ReceivingLogModel : PageModel
 
         TempData["SuccessMessage"] = $"Shipment {entry.JpKey} relocated to {newStagingLocation}.";
 
-        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, EntryStatusFilter, StatusFilter, SearchTerm });
     }
 
     // -------------------------------------------------------------
@@ -792,7 +822,7 @@ public class ReceivingLogModel : PageModel
 
         TempData["SuccessMessage"] = $"Shipment {entry.JpKey} (PO {entry.PoNumber} - {entry.VendorName}) approved by Materials Admin! {addedCount} line items posted to Job 251078 Materials Inventory.";
 
-        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, EntryStatusFilter, StatusFilter, SearchTerm });
     }
 
     public async Task<IActionResult> OnPostReturnInspectionAsync(int entryId, string returnReason)
@@ -807,6 +837,6 @@ public class ReceivingLogModel : PageModel
 
         TempData["SuccessMessage"] = $"Shipment {entry.JpKey} returned to inspector ({entry.ReceiverName}) for revision: {returnReason}";
 
-        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, SearchTerm });
+        return RedirectToPage(new { GroupBy, StagingFilter, LoadTypeFilter, EntryStatusFilter, StatusFilter, SearchTerm });
     }
 }

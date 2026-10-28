@@ -332,8 +332,8 @@
 
 <!-- Toolbar: Search & Filters -->
 <div class="hs-toolbar px-3 py-2 mt-3">
-    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
-        <div class="d-flex flex-wrap align-items-center gap-2">
+    <form method="get" class="d-flex flex-column align-items-start gap-2 w-100">
+        <div class="d-flex flex-wrap align-items-center gap-2 w-100">
             <!-- Search Input -->
             <div class="hs-search-box position-relative" style="min-width: 320px;">
                 <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
@@ -360,6 +360,15 @@
                 }
             </select>
 
+            <!-- Specific Statuses Filter Dropdown -->
+            <select name="EntryStatusFilter" class="form-select form-select-sm" style="width: 175px;" onchange="this.form.submit()">
+                <option value="">All Statuses (@Model.StatusOptions.Count)</option>
+                @foreach (var st in Model.StatusOptions)
+                {
+                    <option value="@st" selected="@(Model.EntryStatusFilter == st)">@st</option>
+                }
+            </select>
+
             <!-- Status Filter Dropdown -->
             <select name="StatusFilter" class="form-select form-select-sm" style="width: 175px;" onchange="this.form.submit()">
                 <option value="active" selected="@(Model.StatusFilter == "active")">🟡 Active in Yard</option>
@@ -371,7 +380,7 @@
                 <i class="bi bi-funnel"></i> Apply
             </button>
 
-            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.StagingFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter))
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.StagingFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter) || !string.IsNullOrEmpty(Model.EntryStatusFilter))
             {
                 <a asp-page="/ReceivingLog" class="text-decoration-none text-danger small ms-1">
                     <i class="bi bi-x-circle"></i> Clear
@@ -380,7 +389,7 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <span class="text-muted small" id="toolbarSortNotice">
+            <span class="text-muted small text-start w-100" id="toolbarSortNotice">
                 Default order: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>
             </span>
         </div>
@@ -407,8 +416,18 @@
                 <table class="hs-table align-middle mb-0" id="receivingLogTable">
                     <thead>
                         <tr>
-                            <th style="width: 140px;">JP Key</th>
-                            <th style="width: 105px;">Job #</th>
+                            <th style="width: 140px;" class="sortable-col" data-sort-key="jpkey" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>JP Key</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
+                            <th style="width: 105px;" class="sortable-col" data-sort-key="job" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span>Job #</span>
+                                    <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                                </div>
+                            </th>
                             <th style="width: 105px;" class="sortable-col" data-sort-key="po" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
                                 <div class="d-flex align-items-center justify-content-between">
                                     <span>PO #</span>
@@ -478,7 +497,7 @@
                                 data-staging="@item.StagingLocation"
                                 data-arrival="@item.ArrivalDateTime.ToString("MMM d, yyyy h:mm tt")"
                                 data-arrival-ts="@item.ArrivalDateTime.Ticks"
-                                data-status="@item.Status"
+                                data-status="@ReceivingLogModel.GetStatusDisplayName(item.Status)"
                                 data-receiver="@(item.ReceiverName ?? "Unassigned")"
                                 data-unloader="@(item.Unloader ?? "--")"
                                 data-mrr="@(item.MrrNumber ?? "--")"
@@ -1444,15 +1463,19 @@
     }
 
     // -------------------------------------------------------------
-    // Client-Side Column Sorting for Receiving Log
-    // Supports 3-state toggle: Unsorted -> Ascending -> Descending -> Unsorted
+    // Client-Side Multi-Column Sorting for Receiving Log
+    // Supports 3-state toggle per column: Unsorted -> Ascending -> Descending -> Unsorted
+    // Sorts are applied in selection order (left-to-right in #toolbarSortNotice)
+    // and can be reordered via drag-and-drop ahead or behind other sorts.
     // Columns: PO#, Vendor, Packing Slip#, BOL#, Load Type, Staging, Landed Time, Status
     // -------------------------------------------------------------
     function initTableSorting() {
-        var currentSortKey = null;
-        var currentSortDir = 'none'; // 'none' | 'asc' | 'desc'
+        var activeSorts = []; // Array of { key: string, dir: 'asc' | 'desc' }
+        var draggedSortIndex = null;
 
         var sortLabels = {
+            'jpkey': 'JP Key',
+            'job': 'Job #',
             'po': 'PO #',
             'vendor': 'Vendor',
             'slip': 'Packing Slip #',
@@ -1472,17 +1495,12 @@
             });
         });
 
-        function compareRows(a, b, key, dir) {
-            if (dir === 'none' || !key) {
-                var idxA = parseInt(a.dataset.originalIndex, 10) || 0;
-                var idxB = parseInt(b.dataset.originalIndex, 10) || 0;
-                return idxA - idxB;
-            }
-
+        function compareSingleKey(a, b, key, dir) {
             if (key === 'arrival') {
                 var tsA = parseInt(a.dataset.arrivalTs, 10) || 0;
                 var tsB = parseInt(b.dataset.arrivalTs, 10) || 0;
-                return dir === 'asc' ? (tsA - tsB) : (tsB - tsA);
+                var diff = tsA - tsB;
+                return dir === 'asc' ? diff : -diff;
             }
 
             var valA = (a.dataset[key] || '').trim();
@@ -1493,30 +1511,205 @@
             return dir === 'asc' ? cmp : -cmp;
         }
 
+        function compareRows(a, b) {
+            for (var i = 0; i < activeSorts.length; i++) {
+                var s = activeSorts[i];
+                var cmp = compareSingleKey(a, b, s.key, s.dir);
+                if (cmp !== 0) {
+                    return cmp;
+                }
+            }
+
+            var idxA = parseInt(a.dataset.originalIndex, 10) || 0;
+            var idxB = parseInt(b.dataset.originalIndex, 10) || 0;
+            return idxA - idxB;
+        }
+
+        function bindToolbarDragEvents(toolbarNotice) {
+            var chips = Array.from(toolbarNotice.querySelectorAll('.sort-chip'));
+            if (chips.length === 0) return;
+
+            function clearDropIndicators() {
+                chips.forEach(function(c) {
+                    c.classList.remove('drag-over-before', 'drag-over-after');
+                });
+            }
+
+            function reorderSorts(fromIdx, targetIdx, placeAfter) {
+                if (fromIdx === null || isNaN(fromIdx) || targetIdx === null || isNaN(targetIdx)) return;
+                if (fromIdx < 0 || fromIdx >= activeSorts.length) return;
+
+                var insertAt = placeAfter ? (targetIdx + 1) : targetIdx;
+                if (insertAt === fromIdx || insertAt === fromIdx + 1) {
+                    return; // No change in position
+                }
+
+                var movedItem = activeSorts.splice(fromIdx, 1)[0];
+                if (fromIdx < insertAt) {
+                    insertAt -= 1;
+                }
+                activeSorts.splice(insertAt, 0, movedItem);
+                applySorting();
+            }
+
+            chips.forEach(function(chip) {
+                chip.addEventListener('dragstart', function(e) {
+                    draggedSortIndex = parseInt(chip.dataset.sortIndex, 10);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', String(draggedSortIndex));
+                    setTimeout(function() {
+                        chip.classList.add('dragging');
+                    }, 0);
+                });
+
+                chip.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'move';
+
+                    var targetIdx = parseInt(chip.dataset.sortIndex, 10);
+                    clearDropIndicators();
+                    if (targetIdx === draggedSortIndex) return;
+
+                    var rect = chip.getBoundingClientRect();
+                    var midX = rect.left + rect.width / 2;
+                    if (e.clientX > midX) {
+                        chip.classList.add('drag-over-after');
+                    } else {
+                        chip.classList.add('drag-over-before');
+                    }
+                });
+
+                chip.addEventListener('dragleave', function(e) {
+                    if (!chip.contains(e.relatedTarget)) {
+                        chip.classList.remove('drag-over-before', 'drag-over-after');
+                    }
+                });
+
+                chip.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var targetIdx = parseInt(chip.dataset.sortIndex, 10);
+                    var fromIdx = draggedSortIndex !== null ? draggedSortIndex : parseInt(e.dataTransfer.getData('text/plain'), 10);
+
+                    var rect = chip.getBoundingClientRect();
+                    var placeAfter = e.clientX > (rect.left + rect.width / 2);
+
+                    clearDropIndicators();
+                    draggedSortIndex = null;
+                    reorderSorts(fromIdx, targetIdx, placeAfter);
+                });
+
+                chip.addEventListener('dragend', function() {
+                    chip.classList.remove('dragging');
+                    clearDropIndicators();
+                    draggedSortIndex = null;
+                });
+            });
+
+            // Also allow dropping in the gaps between chips inside #toolbarSortChipsContainer
+            var container = toolbarNotice.querySelector('#toolbarSortChipsContainer');
+            if (container) {
+                container.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (e.target.closest('.sort-chip')) return;
+
+                    clearDropIndicators();
+                    var closestChip = null;
+                    var closestDist = Infinity;
+                    var placeAfter = false;
+
+                    chips.forEach(function(c) {
+                        var rect = c.getBoundingClientRect();
+                        var midX = rect.left + rect.width / 2;
+                        var dist = Math.abs(e.clientX - midX);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestChip = c;
+                            placeAfter = e.clientX > midX;
+                        }
+                    });
+
+                    if (closestChip) {
+                        var targetIdx = parseInt(closestChip.dataset.sortIndex, 10);
+                        if (targetIdx !== draggedSortIndex) {
+                            closestChip.classList.add(placeAfter ? 'drag-over-after' : 'drag-over-before');
+                        }
+                    }
+                });
+
+                container.addEventListener('drop', function(e) {
+                    if (e.target.closest('.sort-chip')) return;
+                    e.preventDefault();
+
+                    var fromIdx = draggedSortIndex !== null ? draggedSortIndex : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    var closestChip = null;
+                    var closestDist = Infinity;
+                    var placeAfter = false;
+
+                    chips.forEach(function(c) {
+                        var rect = c.getBoundingClientRect();
+                        var midX = rect.left + rect.width / 2;
+                        var dist = Math.abs(e.clientX - midX);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestChip = c;
+                            placeAfter = e.clientX > midX;
+                        }
+                    });
+
+                    clearDropIndicators();
+                    draggedSortIndex = null;
+                    if (closestChip) {
+                        var targetIdx = parseInt(closestChip.dataset.sortIndex, 10);
+                        reorderSorts(fromIdx, targetIdx, placeAfter);
+                    }
+                });
+            }
+        }
+
         function updateSortUI() {
             var headers = document.querySelectorAll('th.sortable-col');
             headers.forEach(function(th) {
                 var key = th.dataset.sortKey;
                 var icon = th.querySelector('.sort-icon');
+                var badge = th.querySelector('.sort-priority-badge');
                 var label = sortLabels[key] || key;
+                var sortIdx = activeSorts.findIndex(function(s) { return s.key === key; });
 
-                if (key === currentSortKey && currentSortDir !== 'none') {
+                if (sortIdx !== -1) {
+                    var sortObj = activeSorts[sortIdx];
                     th.classList.add('sorted-active');
-                    if (currentSortDir === 'asc') {
+
+                    if (!badge && icon && icon.parentNode) {
+                        badge = document.createElement('span');
+                        badge.className = 'sort-priority-badge ms-1';
+                        icon.parentNode.insertBefore(badge, icon);
+                    }
+                    if (badge) {
+                        badge.textContent = String(sortIdx + 1);
+                        badge.style.display = 'inline-flex';
+                    }
+
+                    if (sortObj.dir === 'asc') {
                         if (icon) {
                             icon.className = 'bi bi-arrow-up sort-icon text-primary fw-bold ms-1';
                             icon.style.opacity = '1';
                         }
-                        th.title = label + ': Sorted ascending (A-Z, 0-9). Click to sort descending.';
+                        th.title = label + ' (Sort #' + (sortIdx + 1) + '): Sorted ascending (A-Z, 0-9). Click to sort descending.';
                     } else {
                         if (icon) {
                             icon.className = 'bi bi-arrow-down sort-icon text-primary fw-bold ms-1';
                             icon.style.opacity = '1';
                         }
-                        th.title = label + ': Sorted descending (Z-A, 9-0). Click to return to unsorted.';
+                        th.title = label + ' (Sort #' + (sortIdx + 1) + '): Sorted descending (Z-A, 9-0). Click to remove sort.';
                     }
                 } else {
                     th.classList.remove('sorted-active');
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
                     if (icon) {
                         icon.className = 'bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1';
                         icon.style.opacity = '';
@@ -1525,14 +1718,38 @@
                 }
             });
 
-            // Update toolbar sort indicator
+            // Update toolbar sort indicator with left-to-right draggable chips
             var toolbarNotice = document.getElementById('toolbarSortNotice');
             if (toolbarNotice) {
-                if (currentSortKey && currentSortDir !== 'none') {
-                    var dirText = currentSortDir === 'asc' ? 'Ascending (A &rarr; Z, 0 &rarr; 9)' : 'Descending (Z &rarr; A, 9 &rarr; 0)';
-                    var dirIcon = currentSortDir === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt';
-                    toolbarNotice.innerHTML = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi ' + dirIcon + ' me-1"></i>Sorted by: <strong>' + (sortLabels[currentSortKey] || currentSortKey) + '</strong> (' + dirText + ')</span> ' +
-                        '<button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-1" onclick="window.resetTableSorting()"><i class="bi bi-x-circle me-1"></i>Reset to default order</button>';
+                if (activeSorts.length > 0) {
+                    var chipsHtml = activeSorts.map(function(s, idx) {
+                        var label = sortLabels[s.key] || s.key;
+                        var dirArrow = s.dir === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down';
+                        var dirShort = s.dir === 'asc' ? 'Asc' : 'Desc';
+                        var arrowSeparator = idx > 0 ? '<i class="bi bi-arrow-right text-muted small mx-1"></i>' : '';
+
+                        return arrowSeparator +
+                            '<span class="sort-chip" draggable="true" data-sort-key="' + s.key + '" data-sort-index="' + idx + '" title="Drag left or right to change sort priority">' +
+                                '<i class="bi bi-grip-vertical text-secondary me-1"></i>' +
+                                '<span class="sort-priority-badge me-1">' + (idx + 1) + '</span>' +
+                                '<strong>' + label + '</strong>' +
+                                '<span class="ms-1 text-primary fw-semibold"><i class="bi ' + dirArrow + '"></i> ' + dirShort + '</span>' +
+                                '<button type="button" class="btn-close-sort" onclick="window.removeSingleSort(\'' + s.key + '\', event)" title="Remove ' + label + ' sort">&times;</button>' +
+                            '</span>';
+                    }).join('');
+
+                    toolbarNotice.innerHTML =
+                        '<span class="d-inline-flex align-items-center flex-wrap gap-1">' +
+                            '<span class="text-muted me-1"><i class="bi bi-sort-down text-primary me-1"></i>Sorted by <span class="text-secondary" style="font-size: 0.75rem;">(drag to reorder)</span>:</span>' +
+                            '<span id="toolbarSortChipsContainer" class="d-inline-flex align-items-center flex-wrap">' +
+                                chipsHtml +
+                            '</span>' +
+                            '<button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-2" onclick="window.resetTableSorting()">' +
+                                '<i class="bi bi-x-circle me-1"></i>Reset' +
+                            '</button>' +
+                        '</span>';
+
+                    bindToolbarDragEvents(toolbarNotice);
                 } else {
                     toolbarNotice.innerHTML = 'Default order: <strong class="text-dark">JP Key &rarr; Job # &rarr; Staging Location</strong>';
                 }
@@ -1548,7 +1765,7 @@
                 if (rows.length <= 1) return;
 
                 rows.sort(function(a, b) {
-                    return compareRows(a, b, currentSortKey, currentSortDir);
+                    return compareRows(a, b);
                 });
 
                 var fragment = document.createDocumentFragment();
@@ -1569,27 +1786,33 @@
             var key = th.dataset.sortKey;
             if (!key) return;
 
-            if (currentSortKey !== key) {
-                currentSortKey = key;
-                currentSortDir = 'asc';
+            var existingIdx = activeSorts.findIndex(function(s) { return s.key === key; });
+            if (existingIdx === -1) {
+                activeSorts.push({ key: key, dir: 'asc' });
+            } else if (activeSorts[existingIdx].dir === 'asc') {
+                activeSorts[existingIdx].dir = 'desc';
             } else {
-                if (currentSortDir === 'asc') {
-                    currentSortDir = 'desc';
-                } else if (currentSortDir === 'desc') {
-                    currentSortDir = 'none';
-                    currentSortKey = null;
-                } else {
-                    currentSortDir = 'asc';
-                }
+                activeSorts.splice(existingIdx, 1);
             }
 
             applySorting();
         });
 
-        // Expose reset sorting function globally
+        // Expose remove single sort and reset all sorts globally
+        window.removeSingleSort = function(key, e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            var idx = activeSorts.findIndex(function(s) { return s.key === key; });
+            if (idx !== -1) {
+                activeSorts.splice(idx, 1);
+                applySorting();
+            }
+        };
+
         window.resetTableSorting = function() {
-            currentSortKey = null;
-            currentSortDir = 'none';
+            activeSorts = [];
             applySorting();
         };
     }

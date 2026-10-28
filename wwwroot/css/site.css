@@ -901,3 +901,73 @@ body.hubspot-body {
   color: #ffffff;
   border-color: #0284c7;
 }
+
+
+/* Multi-Column Sort & Drag-and-Drop Reordering Styles */
+.sort-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background-color: var(--hs-coral);
+  border-radius: 999px;
+}
+
+.sort-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 12px;
+  background-color: #f0f6ff;
+  color: var(--hs-navy-dark);
+  border: 1px solid #b6d4fe;
+  border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  position: relative;
+}
+
+.sort-chip:hover {
+  background-color: #e2eeff;
+  box-shadow: 0 1px 3px rgba(13, 110, 253, 0.15);
+}
+
+.sort-chip:active,
+.sort-chip.dragging {
+  cursor: grabbing;
+  opacity: 0.55;
+}
+
+.sort-chip.drag-over-before {
+  box-shadow: -3px 0 0 0 var(--hs-coral);
+  border-left-color: var(--hs-coral);
+}
+
+.sort-chip.drag-over-after {
+  box-shadow: 3px 0 0 0 var(--hs-coral);
+  border-right-color: var(--hs-coral);
+}
+
+.sort-chip .btn-close-sort {
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  margin-left: 4px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.sort-chip .btn-close-sort:hover {
+  color: #dc3545;
+  background-color: rgba(220, 53, 69, 0.1);
+}
