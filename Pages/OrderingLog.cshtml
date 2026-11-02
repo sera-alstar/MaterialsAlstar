@@ -1,0 +1,1712 @@
+@page
+@model MaterialsAlstar.Pages.OrderingLogModel
+@{
+    ViewData["Title"] = "Expected Shipments & Ordering Log";
+
+    string GetRelativeClass(string relBadge)
+    {
+        return relBadge switch
+        {
+            "Today" => "badge-rel-today",
+            "Yesterday" => "badge-rel-yesterday",
+            "Tomorrow" => "badge-rel-tomorrow",
+            _ when relBadge.Contains("past") => "badge-rel-past",
+            _ => "badge-rel-future"
+        };
+    }
+}
+
+<!-- Notification Banners -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill fs-4 me-2 text-success"></i>
+            <div>
+                <strong>Success!</strong> @TempData["SuccessMessage"]
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a asp-page="/ReceivingLog" class="btn btn-sm btn-success text-white fw-bold">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Open Receiving Log
+            </a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+}
+
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
+            <div>
+                <strong>Notice:</strong> @TempData["WarningMessage"]
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a asp-page="/ReceivingLog" class="btn btn-sm btn-warning text-dark fw-bold">
+                <i class="bi bi-shield-check me-1"></i> View Admin Queue
+            </a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+}
+
+<!-- Page Sub-Header / Breadcrumb -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a asp-page="/Index">Materials &amp; QC</a> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span>Shipping &amp; Receiving</span> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span class="text-dark fw-semibold">Ordering Log (Expected Orders)</span>
+    </div>
+
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="hs-page-title mb-0">
+                Expected Shipments
+                <span class="hs-count-badge" id="recordCountBadge">@Model.Orders.Count shipments</span>
+            </h1>
+            <span class="badge bg-light text-muted border px-2 py-1 small">
+                <i class="bi bi-calendar-event me-1"></i> Monday &ndash; Friday receiving window
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- Create New Shipment Button for Unscheduled/Client-supplied -->
+            <button class="btn btn-outline-primary btn-sm fw-semibold" type="button" onclick="openCreateShipmentModal('@Model.SearchTerm')">
+                <i class="bi bi-plus-circle me-1"></i> New Shipment (Not in Log)
+            </button>
+
+            <!-- Date Context & Picker -->
+            <form method="get" class="d-flex align-items-center gap-2">
+                <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+                @if (!string.IsNullOrEmpty(Model.VendorFilter)) { <input type="hidden" name="VendorFilter" value="@Model.VendorFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.LoadTypeFilter)) { <input type="hidden" name="LoadTypeFilter" value="@Model.LoadTypeFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.YardStatusFilter)) { <input type="hidden" name="YardStatusFilter" value="@Model.YardStatusFilter" /> }
+                @if (!string.IsNullOrEmpty(Model.SearchTerm)) { <input type="hidden" name="SearchTerm" value="@Model.SearchTerm" /> }
+
+                <div class="input-group input-group-sm" style="width: 250px;">
+                    <span class="input-group-text bg-white text-muted small"><i class="bi bi-calendar3"></i> As Of:</span>
+                    <input type="date" name="ReferenceDateStr" class="form-control form-control-sm" 
+                           value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
+                </div>
+
+                @if (Model.ReferenceDate.Date != DateTime.Today)
+                {
+                    <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" class="hs-btn-secondary btn-sm py-1 px-2" title="Reset to Today">
+                        <i class="bi bi-arrow-counterclockwise"></i> Today
+                    </a>
+                }
+            </form>
+
+            <button class="hs-btn-secondary" type="button" onclick="exportOrdersToCsv()">
+                <i class="bi bi-download me-1"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Window Context Alert Banner -->
+    <div class="d-flex align-items-center justify-content-between p-2 px-3 mt-2 rounded-2 bg-light border text-muted small">
+        <div class="d-flex align-items-center gap-3">
+            <span>
+                <i class="bi bi-info-circle text-primary me-1"></i>
+                <strong>Operational Reference Date:</strong> @Model.ReferenceDate.ToString("dddd, MMMM d, yyyy")
+            </span>
+            <span class="text-secondary">|</span>
+            <span>
+                <strong>3-Day Window:</strong> 
+                Yesterday (@Model.YesterdayBusinessDay.ToString("ddd, MMM d")), 
+                Today (@Model.ReferenceDate.ToString("ddd, MMM d")), 
+                Tomorrow (@Model.TomorrowBusinessDay.ToString("ddd, MMM d"))
+            </span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary-subtle text-secondary border">Structural Steel Excluded (Separate Handling)</span>
+        </div>
+    </div>
+
+    <!-- Saved View Navigation Tabs -->
+    <div class="hs-views-bar mt-3">
+        <!-- 3-Day Window (Default) -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="3day" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "3day" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+            <i class="bi bi-calendar3-range"></i> 
+            3-Day Window (Yesterday, Today, Tomorrow) 
+            <span class="badge bg-primary text-white rounded-pill ms-1">@Model.TotalWindowOrders</span>
+        </a>
+
+        <!-- Past Due (> 1 Business Day) -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="pastdue" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "pastdue" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+            <i class="bi bi-exclamation-octagon text-danger"></i> 
+            Past Due (&gt; 1 Day) 
+            <span class="badge @(Model.PastDueCount > 0 ? "bg-danger text-white" : "bg-secondary-subtle text-secondary") rounded-pill ms-1">@Model.PastDueCount</span>
+        </a>
+
+        <!-- Future / Rest of Week / Next Week -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="future" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "future" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+            <i class="bi bi-arrow-right-circle text-info"></i> 
+            @(Model.IsThursdayOrFriday ? "Next Week (" + Model.NextWeekMonday.ToString("MMM d") + " - " + Model.NextWeekFriday.ToString("MMM d") + ")" : "Upcoming / Next Week")
+            <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.NextWeekCount</span>
+        </a>
+
+        <!-- All Open Orders -->
+        <a asp-page="/OrderingLog" 
+           asp-route-ViewMode="all" 
+           asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")"
+           asp-route-VendorFilter="@Model.VendorFilter"
+           asp-route-LoadTypeFilter="@Model.LoadTypeFilter"
+           asp-route-SearchTerm="@Model.SearchTerm"
+           class="hs-view-tab text-decoration-none @(Model.ViewMode == "all" && string.IsNullOrEmpty(Model.SearchTerm) ? "active" : "")">
+            <i class="bi bi-list-check"></i> 
+            All Unreceived Orders 
+            <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">@Model.TotalOpenOrders</span>
+        </a>
+
+        @if (!string.IsNullOrEmpty(Model.SearchTerm))
+        {
+            <div class="hs-view-tab active text-decoration-none bg-white">
+                <i class="bi bi-search text-primary"></i> 
+                JP Key Search: <span class="fw-bold font-monospace">@Model.SearchTerm</span>
+                <span class="badge bg-dark text-white rounded-pill ms-1">@Model.Orders.Count</span>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Search Not Found Alert Box (Unscheduled Arrival Prompt) -->
+@if (Model.IsSearchNotFound)
+{
+    <div class="px-3 pt-3">
+        <div class="alert alert-warning border-warning d-flex flex-wrap align-items-center justify-content-between p-3 rounded-3 shadow-sm">
+            <div class="d-flex align-items-center mb-2 mb-md-0">
+                <i class="bi bi-search fs-3 text-warning me-3"></i>
+                <div>
+                    <h6 class="mb-1 fw-bold text-dark">No Expected Order Found for JP Key / Search "@Model.SearchTerm"</h6>
+                    <div class="text-muted small">
+                        This shipment may be client-supplied, expedited, or has not yet been registered by SCM. You can accept and check it into the yard now.
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-warning text-dark fw-bold" onclick="openCreateShipmentModal('@Model.SearchTerm')">
+                <i class="bi bi-plus-circle-fill me-1"></i> Check In as New Shipment (Not in Log)
+            </button>
+        </div>
+    </div>
+}
+
+<!-- KPI Summary Cards Row -->
+<div class="px-3 pt-3">
+    <div class="row g-3">
+        <!-- 3-Day Expected -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-primary">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Expected (3-Day Window)</span>
+                    <i class="bi bi-calendar3 text-primary fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.TotalWindowOrders</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    @Model.YesterdayBusinessDay.ToString("MMM d") &ndash; @Model.TomorrowBusinessDay.ToString("MMM d")
+                </div>
+            </div>
+        </div>
+
+        <!-- Landed in Yard (Awaiting Physical Receiving) -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-success">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Landed in Yard</span>
+                    <i class="bi bi-geo-alt-fill text-success fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-success">@Model.LandedInYardCount</span>
+                    <span class="text-muted small">in yard</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Arrived on-site &bull; Pending check-in
+                </div>
+            </div>
+        </div>
+
+        <!-- Past Due -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 @(Model.PastDueCount > 0 ? "border-danger" : "border-secondary")">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Past Due (&gt; 1 Day)</span>
+                    <i class="bi bi-clock-history @(Model.PastDueCount > 0 ? "text-danger" : "text-muted") fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold @(Model.PastDueCount > 0 ? "text-danger" : "text-dark")">@Model.PastDueCount</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Due before @Model.YesterdayBusinessDay.ToString("ddd, MMM d")
+                </div>
+            </div>
+        </div>
+
+        <!-- Next Week Forecast -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-info">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Next Week Forecast</span>
+                    <i class="bi bi-truck text-info fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.NextWeekCount</span>
+                    <span class="text-muted small">orders</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    @Model.NextWeekMonday.ToString("MMM d") &ndash; @Model.NextWeekFriday.ToString("MMM d")
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar: Search, Filters & Yard Status -->
+<div class="hs-toolbar px-3 py-2 mt-3">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+        <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+        <input type="hidden" name="ReferenceDateStr" value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" />
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Search Input with JP Key prompt -->
+            <div class="hs-search-box position-relative" style="min-width: 320px;">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted"></i>
+                <input type="text" name="SearchTerm" value="@Model.SearchTerm" 
+                       class="form-control form-control-sm ps-4" 
+                       placeholder="Search Job#, PO#, or JP Key (e.g. 251078C0123)..." />
+            </div>
+
+            <!-- Vendor Filter Dropdown -->
+            <select name="VendorFilter" class="form-select form-select-sm" style="width: 170px;" onchange="this.form.submit()">
+                <option value="">All Vendors (@Model.VendorOptions.Count)</option>
+                @foreach (var v in Model.VendorOptions)
+                {
+                    <option value="@v" selected="@(Model.VendorFilter == v)">@v</option>
+                }
+            </select>
+
+            <!-- Load Type Filter Dropdown -->
+            <select name="LoadTypeFilter" class="form-select form-select-sm" style="width: 190px;" onchange="this.form.submit()">
+                <option value="">All Load Types (@Model.LoadTypeOptions.Count)</option>
+                @foreach (var lt in Model.LoadTypeOptions)
+                {
+                    <option value="@lt" selected="@(Model.LoadTypeFilter == lt)">@lt</option>
+                }
+            </select>
+
+            <!-- Yard Landing Status Filter Dropdown -->
+            <select name="YardStatusFilter" class="form-select form-select-sm" style="width: 160px;" onchange="this.form.submit()">
+                <option value="">All Yard Statuses</option>
+                <option value="InTransit" selected="@(Model.YardStatusFilter == "InTransit")">🚚 In Transit Only</option>
+                <option value="Landed" selected="@(Model.YardStatusFilter == "Landed")">📍 Landed in Yard Only</option>
+            </select>
+
+            <button type="submit" class="hs-btn-primary btn-sm py-1">
+                <i class="bi bi-funnel"></i> Apply
+            </button>
+
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || !string.IsNullOrEmpty(Model.VendorFilter) || !string.IsNullOrEmpty(Model.LoadTypeFilter) || !string.IsNullOrEmpty(Model.YardStatusFilter))
+            {
+                <a asp-page="/OrderingLog" asp-route-ViewMode="@Model.ViewMode" asp-route-ReferenceDateStr="@Model.ReferenceDate.ToString("yyyy-MM-dd")" class="text-decoration-none text-danger small ms-1">
+                    <i class="bi bi-x-circle"></i> Clear filters
+                </a>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small" id="toolbarSortNotice">
+                Order: <strong class="text-dark">Landed &rarr; Expected Date &rarr; Job &rarr; PO</strong>
+            </span>
+            <span class="text-secondary small">|</span>
+            <span class="text-muted small">Showing @Model.Orders.Count shipments</span>
+        </div>
+    </form>
+</div>
+
+<!-- Main Table Container -->
+<div class="px-3 pb-4">
+    <div class="hs-table-container rounded-3 overflow-hidden shadow-sm">
+        <div class="table-responsive">
+            <table class="hs-table align-middle" id="orderingLogTable">
+                <thead>
+                    <tr>
+                        <th style="width: 130px;" class="sortable-col" data-sort-key="jpkey" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>JP Key / Job</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 95px;" class="sortable-col" data-sort-key="po" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>PO #</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="vendor" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Vendor</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="slip" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Packing Slip #</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="loadtype" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Load Type</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 140px;" class="sortable-col" data-sort-key="expected" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Expected Date</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 155px;" class="sortable-col" data-sort-key="yardstatus" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Yard Status</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th class="sortable-col" data-sort-key="recstatus" title="Click to sort: Unsorted &rarr; Ascending &rarr; Descending">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Receiving Status</span>
+                                <i class="bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1"></i>
+                            </div>
+                        </th>
+                        <th style="width: 160px; text-align: right;">Yard Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Orders.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <div class="py-4">
+                                    <i class="bi bi-inbox fs-1 text-secondary mb-2 d-block"></i>
+                                    <h6>No shipments found matching this window or filter</h6>
+                                    <p class="small text-muted mb-3">Try clearing search filters or create a new shipment entry.</p>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="openCreateShipmentModal('@Model.SearchTerm')">
+                                        <i class="bi bi-plus-circle me-1"></i> Create New Shipment Entry
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var order in Model.Orders)
+                        {
+                            var relBadge = Model.GetRelativeDateBadge(order.ExpectedDate);
+                            var relBadgeClass = GetRelativeClass(relBadge);
+                            var loadTypeClass = Model.GetLoadTypeBadgeClass(order.LoadType);
+
+                            <tr class="order-log-row"
+                                data-id="@order.Id"
+                                data-jpkey="@order.JpKey"
+                                data-job="@order.JobNumber"
+                                data-po="@order.PoNumber"
+                                data-vendor="@order.VendorName"
+                                data-slip="@(order.PackingSlipNumber ?? "")"
+                                data-loadtype="@order.LoadType"
+                                data-expected="@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")"
+                                data-expected-ts="@(order.ExpectedDate.HasValue ? order.ExpectedDate.Value.Ticks : 0)"
+                                data-yardstatus="@(order.HasLandedInYard ? "Landed in Yard" : (order.ExpectedDate.HasValue && order.ExpectedDate.Value.Date < Model.YesterdayBusinessDay.Date ? "Overdue In Transit" : "In Transit"))"
+                                data-recstatus="@order.ReceivingStatus"
+                                data-client="@(order.ClientName ?? "")"
+                                data-pm="@(order.ProjectManager ?? "")"
+                                data-notes="@(order.Notes ?? "")"
+                                onclick="openOrderDrawer('@order.Id', '@order.JpKey', '@order.JobNumber', '@order.PoNumber', '@Html.Raw(order.VendorName)', '@Html.Raw(order.PackingSlipNumber)', '@Html.Raw(order.LoadType)', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@Html.Raw(order.Notes)')">
+                                <!-- JP Key & Job # with client -->
+                                <td>
+                                    <span class="badge bg-dark-subtle text-dark border font-monospace fw-bold" style="font-size: 11px;">@order.JpKey</span>
+                                    <div class="text-muted small mt-1">@order.JobNumber</div>
+                                    @if (!string.IsNullOrEmpty(order.ClientName))
+                                    {
+                                        <div class="text-muted" style="font-size: 10px;">@order.ClientName</div>
+                                    }
+                                </td>
+
+                                <!-- PO # -->
+                                <td>
+                                    <span class="fw-bold text-dark font-monospace">@order.PoNumber</span>
+                                </td>
+
+                                <!-- Vendor -->
+                                <td>
+                                    <div class="fw-semibold text-dark">@order.VendorName</div>
+                                    @if (order.IsLongLead)
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning-subtle" style="font-size: 10px;">
+                                            <i class="bi bi-hourglass-split"></i> Long Lead
+                                        </span>
+                                    }
+                                </td>
+
+                                <!-- Packing Slip # (Handles multiples) -->
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(order.PackingSlipNumber))
+                                    {
+                                        <span class="text-muted fst-italic small">Pending Vendor Slip</span>
+                                    }
+                                    else
+                                    {
+                                        var slips = order.PackingSlipNumber.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                        if (slips.Length == 1)
+                                        {
+                                            <span class="badge bg-light text-dark border font-monospace">@slips[0]</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                <span class="badge bg-light text-dark border font-monospace">@slips[0]</span>
+                                                <span class="badge bg-secondary text-white rounded-pill" style="font-size: 10px;" title="@order.PackingSlipNumber">
+                                                    +@(slips.Length - 1) slips
+                                                </span>
+                                            </div>
+                                        }
+                                    }
+                                </td>
+
+                                <!-- Load Type (Valves, Pipe, SNG, Supports, etc.) -->
+                                <td>
+                                    <span class="hs-badge-loadtype @loadTypeClass">
+                                        @order.LoadType
+                                    </span>
+                                </td>
+
+                                <!-- Expected Date with Mon-Fri relative tag -->
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <span class="fw-medium text-dark small">
+                                            @(order.ExpectedDate?.ToString("ddd, MMM d, yyyy") ?? "--")
+                                        </span>
+                                        <span class="hs-badge-rel @relBadgeClass" style="width: fit-content;">
+                                            @relBadge
+                                        </span>
+                                    </div>
+                                </td>
+
+                                <!-- Has Landed in Yard? -->
+                                <td>
+                                    @if (order.HasLandedInYard)
+                                    {
+                                        <span class="badge-yard-landed" title="Landed in yard: @(order.ActualArrivalDate?.ToString("g") ?? "Time recorded")">
+                                            <i class="bi bi-geo-alt-fill"></i> Landed in Yard
+                                        </span>
+                                        @if (order.ActualArrivalDate.HasValue)
+                                        {
+                                            <div class="text-muted" style="font-size: 11px;">@order.ActualArrivalDate.Value.ToString("MMM d, h:mm tt")</div>
+                                        }
+                                    }
+                                    else if (order.ExpectedDate.HasValue && order.ExpectedDate.Value.Date < Model.YesterdayBusinessDay.Date)
+                                    {
+                                        <span class="badge-yard-overdue">
+                                            <i class="bi bi-exclamation-triangle-fill"></i> Overdue &bull; In Transit
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-yard-transit">
+                                            <i class="bi bi-truck"></i> In Transit
+                                        </span>
+                                    }
+                                </td>
+
+                                <!-- Receiving Status / Notes (OS&D, Backorder, etc.) -->
+                                <td>
+                                    @if (order.ReceivingStatus == "Pending Inspection")
+                                    {
+                                        <span class="badge bg-warning-subtle text-dark border border-warning-subtle">
+                                            <i class="bi bi-search"></i> Awaiting Inspection
+                                        </span>
+                                    }
+                                    else if (order.ReceivingStatus.Contains("Split") || order.ReceivingStatus.Contains("Partial"))
+                                    {
+                                        <span class="badge bg-info-subtle text-dark border border-info-subtle">
+                                            <i class="bi bi-pie-chart"></i> Partial / Split
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary border">
+                                            Not Yet Received
+                                        </span>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(order.Notes))
+                                    {
+                                        <div class="text-truncate text-muted small mt-1" style="max-width: 180px;" title="@order.Notes">
+                                            <i class="bi bi-sticky text-muted me-1"></i>@order.Notes
+                                        </div>
+                                    }
+                                </td>
+
+                                <!-- Actions: Accept Shipment into Yard -->
+                                <td style="text-align: right;">
+                                    <div class="d-flex align-items-center justify-content-end gap-1">
+                                        <button class="btn btn-sm btn-primary py-1 px-2 fw-semibold" type="button"
+                                                onclick="event.stopPropagation(); openAcceptModal('@order.Id', '@order.JpKey', '@order.JobNumber', '@order.PoNumber', '@Html.Raw(order.VendorName)', '@Html.Raw(order.PackingSlipNumber)', '@Html.Raw(order.LoadType)')"
+                                                title="Accept shipment and check into yard">
+                                            <i class="bi bi-box-arrow-in-down me-1"></i> Accept
+                                        </button>
+                                        <button class="btn btn-sm btn-light border py-1 px-2" type="button" 
+                                                onclick="event.stopPropagation(); openOrderDrawer('@order.Id', '@order.JpKey', '@order.JobNumber', '@order.PoNumber', '@Html.Raw(order.VendorName)', '@Html.Raw(order.PackingSlipNumber)', '@Html.Raw(order.LoadType)', '@(order.ExpectedDate?.ToString("yyyy-MM-dd") ?? "")', '@order.HasLandedInYard', '@(order.ActualArrivalDate?.ToString("g") ?? "")', '@order.ReceivingStatus', '@order.ClientName', '@order.ProjectManager', '@Html.Raw(order.Notes)')"
+                                                title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 1: Accept Shipment & Yard Check-In (For Expected Orders) -->
+<div class="modal fade" id="acceptShipmentModal" tabindex="-1" aria-labelledby="acceptShipmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow">
+            <form method="post" asp-page-handler="AcceptShipment" enctype="multipart/form-data">
+                <input type="hidden" name="expectedOrderId" id="acceptOrderId" />
+                <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+                <input type="hidden" name="ReferenceDateStr" value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" />
+
+                <div class="modal-header bg-light">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="acceptShipmentModalLabel">
+                            <i class="bi bi-box-arrow-in-down text-primary me-2"></i>Accept Shipment &amp; Check-In to Yard
+                        </h5>
+                        <div class="text-muted small">Record physical landing in yard and register entry in Receiving Log</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Order Banner -->
+                    <div class="p-3 mb-3 rounded-2 bg-light border d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <span class="text-muted small d-block">JP Key:</span>
+                            <span class="badge bg-dark font-monospace fs-6" id="acceptJpKey">--</span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Job Number:</span>
+                            <span class="fw-bold fs-6 text-dark" id="acceptJobNumber">--</span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">PO Number:</span>
+                            <span class="fw-bold fs-6 text-primary font-monospace" id="acceptPoNumber">--</span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Vendor:</span>
+                            <span class="fw-bold text-dark" id="acceptVendor">--</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Packing Slip # (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Packing Slip # <span class="text-danger">*</span></label>
+                            <input type="text" name="packingSlipNumber" id="acceptPackingSlip" class="form-control" required 
+                                   placeholder="e.g. PS-88219" />
+                            <div class="form-text small">Verify packing slip number from physical delivery paperwork.</div>
+                        </div>
+
+                        <!-- BOL # (Bill of Lading #) (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">BOL # (Bill of Lading) <span class="text-danger">*</span></label>
+                            <input type="text" name="bolNumber" id="acceptBolNumber" class="form-control" required 
+                                   placeholder="e.g. BOL-104928" />
+                            <div class="form-text small">Required from the carrier/driver freight bill.</div>
+                        </div>
+
+                        <!-- Pallet / Crate / Box Count (Required Breakdown) -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Pallet / Crate / Box Count <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Pallets</span>
+                                        <input type="number" name="palletCount" class="form-control" value="1" min="0" required />
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Crates</span>
+                                        <input type="number" name="crateCount" class="form-control" value="0" min="0" required />
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Boxes</span>
+                                        <input type="number" name="boxCount" class="form-control" value="0" min="0" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Load Type (Strictly restricted to options marked by SCM on the order) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">
+                                Load Type <span class="text-danger">*</span> 
+                                <span class="text-muted fw-normal" style="font-size: 11px;">(Filtered by SCM order scope)</span>
+                            </label>
+                            <select name="selectedLoadType" id="acceptLoadTypeSelect" class="form-select" required>
+                                <!-- Populated dynamically based on order's SCM LoadType -->
+                            </select>
+                        </div>
+
+                        <!-- Staging Location (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Staging Location <span class="text-danger">*</span></label>
+                            <select name="stagingLocation" id="acceptStagingLocation" class="form-select" required>
+                                <option value="Walkway">📍 Walkway (Immediate Receiving Pad)</option>
+                                <option value="Bay 1 - Receiving Floor">📍 Bay 1 - Receiving Floor</option>
+                                <option value="Bay 2 - Fabrication Staging">📍 Bay 2 - Fabrication Staging</option>
+                                <option value="Yard Row A - Pipe Racks">📍 Yard Row A - Pipe Racks</option>
+                                <option value="Yard Row B - Large Equipment">📍 Yard Row B - Large Equipment</option>
+                                <option value="Quarantine / Inspection Pad">📍 Quarantine / Inspection Pad</option>
+                                <option value="Receiving Dock">📍 Receiving Dock</option>
+                            </select>
+                        </div>
+
+                        <!-- Optional Photos: Camera (Mobile) or File Upload (Desktop) -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Photos (Optional)</label>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <!-- Mobile direct camera input -->
+                                <input type="file" name="shipmentPhoto" id="acceptCameraInput" accept="image/*" capture="environment" class="d-none" onchange="previewImage(this, 'acceptPhotoPreviewContainer', 'acceptPhotoPreviewImg')" />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('acceptCameraInput').click()">
+                                    <i class="bi bi-camera-fill me-1 text-primary"></i> Take Photo (Camera)
+                                </button>
+
+                                <!-- Desktop file upload input -->
+                                <input type="file" name="shipmentPhoto" id="acceptFileInput" accept="image/*" class="d-none" onchange="previewImage(this, 'acceptPhotoPreviewContainer', 'acceptPhotoPreviewImg')" />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('acceptFileInput').click()">
+                                    <i class="bi bi-upload me-1 text-secondary"></i> Upload from Computer
+                                </button>
+
+                                <span class="text-muted small">Capture BOL, packing slip, or pallet condition.</span>
+                            </div>
+
+                            <!-- Photo Preview Thumbnail -->
+                            <div id="acceptPhotoPreviewContainer" class="d-none p-2 border rounded-2 bg-light" style="width: fit-content;">
+                                <div class="position-relative">
+                                    <img id="acceptPhotoPreviewImg" src="#" alt="Preview" class="rounded" style="max-height: 120px; max-width: 200px; object-fit: cover;" />
+                                    <button type="button" class="btn btn-danger btn-sm py-0 px-1 position-absolute top-0 end-0 m-1 rounded-circle" onclick="clearPreview('acceptCameraInput', 'acceptFileInput', 'acceptPhotoPreviewContainer')">&times;</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Check-In Notes -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Yard Check-In Notes (Optional)</label>
+                            <textarea name="checkInNotes" class="form-control" rows="2" placeholder="Driver name, courier truck info, condition notes, or unload instructions..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Confirm Yard Check-In
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: Create New Shipment Entry (For Unscheduled / Client-Supplied Arrivals Not in Log) -->
+<div class="modal fade" id="createShipmentModal" tabindex="-1" aria-labelledby="createShipmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow">
+            <form method="post" asp-page-handler="CreateNewShipment" enctype="multipart/form-data">
+                <input type="hidden" name="ViewMode" value="@Model.ViewMode" />
+                <input type="hidden" name="ReferenceDateStr" value="@Model.ReferenceDate.ToString("yyyy-MM-dd")" />
+
+                <div class="modal-header bg-warning-subtle border-bottom border-warning-subtle">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="createShipmentModalLabel">
+                            <i class="bi bi-plus-circle-fill text-warning me-2"></i>Create New Shipment Entry (Not in Log)
+                        </h5>
+                        <div class="text-muted small">Record unscheduled arrival / client-supplied materials for Materials Admin verification</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Workflow Info Alert -->
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-shield-check text-primary me-1"></i>
+                        <strong>Verification Workflow:</strong> Unscheduled shipments are staged in the yard and submitted to the <strong>Materials Admin Verification Queue</strong> to verify SCM PO details before appearing in the receiving log.
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Vendor Name (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+                                <span>Vendor Name <span class="text-danger">*</span></span>
+                                <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingVendors.Count existing vendors</span>
+                            </label>
+                            <div class="position-relative" id="newVendorDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-building"></i></span>
+                                    <input type="text" name="vendorName" id="newVendorNameInput" class="form-control" required
+                                           placeholder="Search or enter vendor name..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newVendorDropdownToggleBtn" title="Toggle vendor suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newVendorDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newVendorDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing Vendors</span>
+                                        <span id="newVendorMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingVendors.Count</span>
+                                    </div>
+                                    <div id="newVendorOptionsList">
+                                        @foreach (var v in Model.ExistingVendors)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-vendor-option-item"
+                                                    data-value="@v">
+                                                <span class="fw-semibold text-dark">@v</span>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newVendorNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing vendors found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter a new vendor.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PO # (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+                                <span>PO # <span class="text-danger">*</span></span>
+                                <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingPOs.Count existing POs</span>
+                            </label>
+                            <div class="position-relative" id="newPoDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-receipt"></i></span>
+                                    <input type="text" name="poNumber" id="newPoNumberInput" class="form-control font-monospace" required
+                                           placeholder="Search or enter PO #..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newPoDropdownToggleBtn" title="Toggle PO suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newPoDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newPoDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing PO Numbers</span>
+                                        <span id="newPoMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingPOs.Count</span>
+                                    </div>
+                                    <div id="newPoOptionsList">
+                                        @foreach (var p in Model.ExistingPOs)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-po-option-item"
+                                                    data-value="@p.PoNumber"
+                                                    data-vendor="@(p.VendorName ?? "")"
+                                                    data-job="@(p.JobNumber ?? "")"
+                                                    data-loadtype="@(p.LoadType ?? "")">
+                                                <div>
+                                                    <span class="fw-bold font-monospace text-dark">@p.PoNumber</span>
+                                                    @if (!string.IsNullOrEmpty(p.VendorName))
+                                                    {
+                                                        <span class="text-muted small ms-2"><i class="bi bi-building me-1"></i>@p.VendorName</span>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(p.JobNumber))
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-dark border ms-1 font-monospace" style="font-size: 10px;">@p.JobNumber</span>
+                                                    }
+                                                </div>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newPoNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing POs found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter an unscheduled PO.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Job # (Optional - Client Supplied Notice) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">
+                                <span class="d-flex justify-content-between align-items-center w-100">
+                                    <span>Job # <span class="badge bg-secondary-subtle text-secondary fw-normal">Optional</span></span>
+                                    <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingJobs.Count existing jobs</span>
+                                </span>
+                            </label>
+                            <div class="position-relative" id="newJobDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-briefcase"></i></span>
+                                    <input type="text" name="jobNumber" id="newJobNumberInput" class="form-control font-monospace"
+                                           placeholder="Search or enter Job # (or leave blank)..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newJobDropdownToggleBtn" title="Toggle job suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newJobDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newJobDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing Jobs</span>
+                                        <span id="newJobMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingJobs.Count</span>
+                                    </div>
+                                    <div id="newJobOptionsList">
+                                        @foreach (var j in Model.ExistingJobs)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-job-option-item"
+                                                    data-value="@j.JobNumber"
+                                                    data-client="@(j.ClientName ?? "")">
+                                                <div>
+                                                    <span class="fw-bold font-monospace text-dark">@j.JobNumber</span>
+                                                    @if (!string.IsNullOrEmpty(j.ClientName))
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-dark border ms-2 small">@j.ClientName</span>
+                                                    }
+                                                </div>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newJobNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing jobs found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter a new Job #.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text small text-muted">
+                                If client-supplied or unknown, leave blank. The Materials Admin will assign the Job #.
+                            </div>
+                        </div>
+
+                        <!-- Packing Slip # (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Packing Slip # <span class="text-danger">*</span></label>
+                            <input type="text" name="packingSlipNumber" class="form-control font-monospace" required placeholder="e.g. PS-10294" />
+                        </div>
+
+                        <!-- BOL # (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">BOL # (Bill of Lading) <span class="text-danger">*</span></label>
+                            <input type="text" name="bolNumber" class="form-control font-monospace" required placeholder="e.g. BOL-54019" />
+                        </div>
+
+                        <!-- Load Type (Required) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Load Type <span class="text-danger">*</span></label>
+                            <select name="loadType" id="newLoadTypeSelect" class="form-select" required>
+                                <option value="SNG / Bolt-Up">🔩 SNG / Bolt-Up (Studs, Nuts, Gaskets)</option>
+                                <option value="Pipe">📏 Pipe</option>
+                                <option value="Valves">🚰 Valves</option>
+                                <option value="Flanges & Fittings">🔘 Flanges &amp; Fittings</option>
+                                <option value="Supports">🏗️ Supports</option>
+                                <option value="Electrical">⚡ Electrical</option>
+                                <option value="Instrumentation">📟 Instrumentation</option>
+                                <option value="General Materials">📦 General Materials / Misc</option>
+                            </select>
+                        </div>
+
+                        <!-- Pallet / Crate / Box Count -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Pallet / Crate / Box Count <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Pallets</span>
+                                        <input type="number" name="palletCount" class="form-control" value="1" min="0" required />
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Crates</span>
+                                        <input type="number" name="crateCount" class="form-control" value="0" min="0" required />
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text small bg-light">Boxes</span>
+                                        <input type="number" name="boxCount" class="form-control" value="0" min="0" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Staging Location -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Staging Location <span class="text-danger">*</span></label>
+                            <select name="stagingLocation" class="form-select" required>
+                                <option value="Walkway">📍 Walkway (Immediate Receiving Pad)</option>
+                                <option value="Bay 1 - Receiving Floor">📍 Bay 1 - Receiving Floor</option>
+                                <option value="Bay 2 - Fabrication Staging">📍 Bay 2 - Fabrication Staging</option>
+                                <option value="Yard Row A - Pipe Racks">📍 Yard Row A - Pipe Racks</option>
+                                <option value="Yard Row B - Large Equipment">📍 Yard Row B - Large Equipment</option>
+                                <option value="Quarantine / Inspection Pad">📍 Quarantine / Inspection Pad</option>
+                                <option value="Receiving Dock">📍 Receiving Dock</option>
+                            </select>
+                        </div>
+
+                        <!-- Photos (Camera & Desktop) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Photos (Optional)</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="file" name="shipmentPhoto" id="createCameraInput" accept="image/*" capture="environment" class="d-none" onchange="previewImage(this, 'createPhotoPreviewContainer', 'createPhotoPreviewImg')" />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('createCameraInput').click()">
+                                    <i class="bi bi-camera-fill me-1 text-primary"></i> Camera
+                                </button>
+
+                                <input type="file" name="shipmentPhoto" id="createFileInput" accept="image/*" class="d-none" onchange="previewImage(this, 'createPhotoPreviewContainer', 'createPhotoPreviewImg')" />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('createFileInput').click()">
+                                    <i class="bi bi-upload me-1 text-secondary"></i> Upload
+                                </button>
+                            </div>
+
+                            <div id="createPhotoPreviewContainer" class="d-none mt-2 p-2 border rounded-2 bg-light" style="width: fit-content;">
+                                <div class="position-relative">
+                                    <img id="createPhotoPreviewImg" src="#" alt="Preview" class="rounded" style="max-height: 100px; max-width: 180px; object-fit: cover;" />
+                                    <button type="button" class="btn btn-danger btn-sm py-0 px-1 position-absolute top-0 end-0 m-1 rounded-circle" onclick="clearPreview('createCameraInput', 'createFileInput', 'createPhotoPreviewContainer')">&times;</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Notes &amp; Physical Observations</label>
+                            <textarea name="notes" class="form-control" rows="2" placeholder="Driver courier details, shipment condition, or identifying marks..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold">
+                        <i class="bi bi-send-check me-1"></i> Submit for Admin Verification
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- HubSpot-style Side Panel / Slide-out Drawer -->
+<div class="hs-drawer-backdrop" id="orderDrawerBackdrop" onclick="closeOrderDrawer()"></div>
+<div class="hs-drawer" id="orderDrawer">
+    <div class="p-3 border-bottom d-flex align-items-center justify-content-between bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary text-white" id="drawerJobPoBadge">Job / PO</span>
+            <h6 class="mb-0 fw-bold" id="drawerVendorTitle">Vendor Details</h6>
+        </div>
+        <button type="button" class="btn-close small" onclick="closeOrderDrawer()"></button>
+    </div>
+
+    <div class="p-4 flex-grow-1 overflow-auto">
+        <!-- Status summary callout -->
+        <div class="p-3 mb-3 rounded-2 bg-light border d-flex align-items-center justify-content-between" id="drawerStatusCallout">
+            <div>
+                <div class="text-muted small">Current Yard Status</div>
+                <div class="fw-bold fs-6" id="drawerYardStatusText">In Transit</div>
+            </div>
+            <div id="drawerStatusIcon">
+                <i class="bi bi-truck fs-3 text-primary"></i>
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted fw-bold small mb-3">Order &amp; SCM Information</h6>
+
+        <div class="row g-3 small mb-4">
+            <div class="col-6">
+                <label class="text-muted d-block">JP Key</label>
+                <span class="badge bg-dark font-monospace fs-6" id="drawerJpKey">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Job Number</label>
+                <span class="fw-bold fs-6" id="drawerJobNumber">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">PO Number</label>
+                <span class="fw-bold fs-6 font-monospace" id="drawerPoNumber">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Client</label>
+                <span class="fw-semibold" id="drawerClient">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Project Manager</label>
+                <span class="fw-semibold" id="drawerPm">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Vendor Name</label>
+                <span class="fw-semibold text-dark" id="drawerVendor">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Packing Slip(s)</label>
+                <div class="fw-semibold font-monospace" id="drawerPackingSlip">--</div>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Load Type</label>
+                <span class="badge bg-light text-dark border" id="drawerLoadType">--</span>
+            </div>
+            <div class="col-6">
+                <label class="text-muted d-block">Expected Arrival Date</label>
+                <span class="fw-semibold" id="drawerExpectedDate">--</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Actual Arrival Date (Yard)</label>
+                <span class="fw-semibold" id="drawerActualArrival">Not landed yet</span>
+            </div>
+            <div class="col-12">
+                <label class="text-muted d-block">Receiving / QC Stage</label>
+                <span class="badge bg-secondary-subtle text-secondary" id="drawerReceivingStatus">Not Received</span>
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted fw-bold small mb-2">Notes &amp; Receiving Instructions</h6>
+        <div class="p-3 bg-light rounded-2 border text-muted small" id="drawerNotes">
+            No special receiving notes recorded.
+        </div>
+
+        <div class="mt-4 pt-3 border-top">
+            <div class="alert alert-info py-2 small mb-0">
+                <i class="bi bi-info-circle me-1"></i> 
+                Accepting this shipment checks it into the yard and automatically registers an entry in the Receiving Log.
+            </div>
+        </div>
+    </div>
+
+    <div class="p-3 border-top bg-light d-flex align-items-center justify-content-between">
+        <button type="button" class="hs-btn-secondary" onclick="closeOrderDrawer()">Close</button>
+        <button type="button" class="btn btn-primary fw-semibold" id="drawerAcceptBtn">
+            <i class="bi bi-box-arrow-in-down me-1"></i> Accept Shipment at Yard
+        </button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var currentDrawerOrder = null;
+
+    function openOrderDrawer(id, jpKey, job, po, vendor, packingSlip, loadType, expectedDate, hasLanded, actualArrival, recStatus, client, pm, notes) {
+        currentDrawerOrder = { id, jpKey, job, po, vendor, packingSlip, loadType };
+
+        document.getElementById('drawerJobPoBadge').innerText = job + ' / ' + po;
+        document.getElementById('drawerJpKey').innerText = jpKey || (job + po);
+        document.getElementById('drawerVendorTitle').innerText = vendor;
+        document.getElementById('drawerJobNumber').innerText = job;
+        document.getElementById('drawerPoNumber').innerText = po;
+        document.getElementById('drawerVendor').innerText = vendor;
+        document.getElementById('drawerClient').innerText = client || 'Alstar Standard';
+        document.getElementById('drawerPm').innerText = pm || 'Assigned PM';
+        document.getElementById('drawerPackingSlip').innerText = packingSlip || 'Pending SCM Vendor Notice';
+        document.getElementById('drawerLoadType').innerText = loadType;
+        document.getElementById('drawerExpectedDate').innerText = expectedDate || 'Pending';
+        document.getElementById('drawerActualArrival').innerText = actualArrival || 'In Transit (Has not arrived)';
+        document.getElementById('drawerReceivingStatus').innerText = recStatus;
+        document.getElementById('drawerNotes').innerText = notes || 'No notes specified.';
+
+        var statusCallout = document.getElementById('drawerStatusCallout');
+        var yardStatusText = document.getElementById('drawerYardStatusText');
+        var statusIcon = document.getElementById('drawerStatusIcon');
+
+        if (hasLanded === 'True' || hasLanded === true) {
+            statusCallout.className = 'p-3 mb-3 rounded-2 bg-success-subtle border border-success-subtle d-flex align-items-center justify-content-between';
+            yardStatusText.innerText = 'Landed in Yard (Pending Receiving/QC)';
+            yardStatusText.className = 'fw-bold fs-6 text-success';
+            statusIcon.innerHTML = '<i class="bi bi-geo-alt-fill fs-3 text-success"></i>';
+        } else {
+            statusCallout.className = 'p-3 mb-3 rounded-2 bg-primary-subtle border border-primary-subtle d-flex align-items-center justify-content-between';
+            yardStatusText.innerText = 'In Transit / Expected';
+            yardStatusText.className = 'fw-bold fs-6 text-primary';
+            statusIcon.innerHTML = '<i class="bi bi-truck fs-3 text-primary"></i>';
+        }
+
+        document.getElementById('drawerAcceptBtn').onclick = function() {
+            closeOrderDrawer();
+            openAcceptModal(id, jpKey, job, po, vendor, packingSlip, loadType);
+        };
+
+        document.getElementById('orderDrawerBackdrop').classList.add('active');
+        document.getElementById('orderDrawer').style.right = '0';
+    }
+
+    function closeOrderDrawer() {
+        document.getElementById('orderDrawerBackdrop').classList.remove('active');
+        document.getElementById('orderDrawer').style.right = '-540px';
+    }
+
+    // Opens the Accept Shipment Modal for an existing SCM Expected Order
+    function openAcceptModal(id, jpKey, job, po, vendor, packingSlip, loadType) {
+        document.getElementById('acceptOrderId').value = id;
+        document.getElementById('acceptJpKey').innerText = jpKey || (job + po);
+        document.getElementById('acceptJobNumber').innerText = job;
+        document.getElementById('acceptPoNumber').innerText = po;
+        document.getElementById('acceptVendor').innerText = vendor;
+        document.getElementById('acceptPackingSlip').value = packingSlip || '';
+        document.getElementById('acceptBolNumber').value = 'BOL-' + po;
+
+        // Dynamically populate Load Type select with ONLY what was marked on this order by SCM
+        var select = document.getElementById('acceptLoadTypeSelect');
+        select.innerHTML = '';
+
+        if (!loadType || loadType.trim() === '') {
+            loadType = 'General Materials';
+        }
+
+        // Split by comma or semicolon
+        var parts = loadType.split(/[,;/]+/).map(p => p.trim()).filter(p => p.length > 0);
+        var uniqueParts = [...new Set(parts)];
+
+        if (uniqueParts.length > 1) {
+            // Option for the full combined load type
+            var fullOpt = document.createElement('option');
+            fullOpt.value = loadType;
+            fullOpt.text = loadType + ' (Complete Order)';
+            select.appendChild(fullOpt);
+        }
+
+        // Options for individual components specified by SCM
+        uniqueParts.forEach(function(part) {
+            var opt = document.createElement('option');
+            opt.value = part;
+            opt.text = part;
+            select.appendChild(opt);
+        });
+
+        var modal = new bootstrap.Modal(document.getElementById('acceptShipmentModal'));
+        modal.show();
+    }
+
+    // Opens Create New Shipment Modal for unscheduled or client-supplied arrivals
+    function openCreateShipmentModal(searchTerm) {
+        if (searchTerm) {
+            // Check if search term resembles a JP key like 251078C0123
+            var match = searchTerm.match(/^([0-9]{5,6}[a-zA-Z]?)([0-9]{3,5})$/);
+            if (match) {
+                document.getElementById('newJobNumberInput').value = match[1];
+                document.getElementById('newPoNumberInput').value = match[2];
+            } else if (searchTerm.startsWith('25') || searchTerm.startsWith('26') || searchTerm.startsWith('24')) {
+                document.getElementById('newJobNumberInput').value = searchTerm;
+            } else {
+                document.getElementById('newPoNumberInput').value = searchTerm;
+            }
+        }
+
+        // If PO is pre-filled, check for matching existing PO to auto-suggest vendor/job
+        var poVal = (document.getElementById('newPoNumberInput').value || '').trim();
+        if (poVal) {
+            var matchingPoEl = document.querySelector('#newPoOptionsList .new-po-option-item[data-value="' + CSS.escape(poVal) + '"]');
+            if (matchingPoEl) {
+                var vInput = document.getElementById('newVendorNameInput');
+                var jInput = document.getElementById('newJobNumberInput');
+                if (vInput && !vInput.value && matchingPoEl.dataset.vendor) {
+                    vInput.value = matchingPoEl.dataset.vendor;
+                }
+                if (jInput && !jInput.value && matchingPoEl.dataset.job) {
+                    jInput.value = matchingPoEl.dataset.job;
+                }
+            }
+        }
+
+        var modal = new bootstrap.Modal(document.getElementById('createShipmentModal'));
+        modal.show();
+    }
+
+    // Image preview helper
+    function previewImage(input, containerId, imgId) {
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById(imgId).src = e.target.result;
+                document.getElementById(containerId).classList.remove('d-none');
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function clearPreview(camId, fileId, containerId) {
+        document.getElementById(camId).value = '';
+        document.getElementById(fileId).value = '';
+        document.getElementById(containerId).classList.add('d-none');
+    }
+
+    function exportOrdersToCsv() {
+        var table = document.getElementById('orderingLogTable');
+        var rows = table.querySelectorAll('tr');
+        var csv = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = [], cols = rows[i].querySelectorAll('td, th');
+            for (var j = 0; j < cols.length - 1; j++) {
+                var text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/"/g, '""').trim();
+                row.push('"' + text + '"');
+            }
+            if (row.length > 0) csv.push(row.join(','));
+        }
+        var csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+        var downloadLink = document.createElement('a');
+        downloadLink.download = 'Expected_Shipments_Ordering_Log.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }
+
+    // -------------------------------------------------------------
+    // Client-Side Column Sorting for Ordering Log
+    // Supports 3-state toggle: Unsorted -> Ascending -> Descending -> Unsorted
+    // Columns: JP Key/Job, PO#, Vendor, Packing Slip#, Load Type, Expected Date, Yard Status, Receiving Status
+    // -------------------------------------------------------------
+    function initTableSorting() {
+        var currentSortKey = null;
+        var currentSortDir = 'none'; // 'none' | 'asc' | 'desc'
+
+        var sortLabels = {
+            'jpkey': 'JP Key / Job',
+            'po': 'PO #',
+            'vendor': 'Vendor',
+            'slip': 'Packing Slip #',
+            'loadtype': 'Load Type',
+            'expected': 'Expected Date',
+            'yardstatus': 'Yard Status',
+            'recstatus': 'Receiving Status'
+        };
+
+        var table = document.getElementById('orderingLogTable');
+        if (!table) return;
+
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        // Cache original order indices on all rows
+        var rows = tbody.querySelectorAll('tr.order-log-row');
+        rows.forEach(function(row, idx) {
+            row.dataset.originalIndex = idx;
+        });
+
+        function compareRows(a, b, key, dir) {
+            if (dir === 'none' || !key) {
+                var idxA = parseInt(a.dataset.originalIndex, 10) || 0;
+                var idxB = parseInt(b.dataset.originalIndex, 10) || 0;
+                return idxA - idxB;
+            }
+
+            if (key === 'expected') {
+                var tsA = parseInt(a.dataset.expectedTs, 10) || 0;
+                var tsB = parseInt(b.dataset.expectedTs, 10) || 0;
+                if (tsA === 0 && tsB === 0) return 0;
+                if (tsA === 0) return 1;
+                if (tsB === 0) return -1;
+                return dir === 'asc' ? (tsA - tsB) : (tsB - tsA);
+            }
+
+            var valA = (a.dataset[key] || '').trim();
+            var valB = (b.dataset[key] || '').trim();
+
+            // Natural alphanumeric / numerical comparison (e.g. PO numbers, vendors, slip, etc.)
+            var cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+            return dir === 'asc' ? cmp : -cmp;
+        }
+
+        function updateSortUI() {
+            var headers = table.querySelectorAll('th.sortable-col');
+            headers.forEach(function(th) {
+                var key = th.dataset.sortKey;
+                var icon = th.querySelector('.sort-icon');
+                var label = sortLabels[key] || key;
+
+                if (key === currentSortKey && currentSortDir !== 'none') {
+                    th.classList.add('sorted-active');
+                    if (currentSortDir === 'asc') {
+                        if (icon) {
+                            icon.className = 'bi bi-arrow-up sort-icon text-primary fw-bold ms-1';
+                            icon.style.opacity = '1';
+                        }
+                        th.title = label + ': Sorted ascending (A-Z, 0-9). Click to sort descending.';
+                    } else {
+                        if (icon) {
+                            icon.className = 'bi bi-arrow-down sort-icon text-primary fw-bold ms-1';
+                            icon.style.opacity = '1';
+                        }
+                        th.title = label + ': Sorted descending (Z-A, 9-0). Click to return to unsorted.';
+                    }
+                } else {
+                    th.classList.remove('sorted-active');
+                    if (icon) {
+                        icon.className = 'bi bi-arrow-down-up sort-icon text-muted opacity-50 ms-1';
+                        icon.style.opacity = '';
+                    }
+                    th.title = 'Click to sort by ' + label + ': Unsorted \u2192 Ascending \u2192 Descending';
+                }
+            });
+
+            // Update toolbar sort indicator
+            var toolbarNotice = document.getElementById('toolbarSortNotice');
+            if (toolbarNotice) {
+                if (currentSortKey && currentSortDir !== 'none') {
+                    var dirText = currentSortDir === 'asc' ? 'Ascending (A &rarr; Z, 0 &rarr; 9)' : 'Descending (Z &rarr; A, 9 &rarr; 0)';
+                    var dirIcon = currentSortDir === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt';
+                    toolbarNotice.innerHTML = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi ' + dirIcon + ' me-1"></i>Sorted by: <strong>' + (sortLabels[currentSortKey] || currentSortKey) + '</strong> (' + dirText + ')</span> ' +
+                        '<button type="button" class="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-1" onclick="window.resetTableSorting()"><i class="bi bi-x-circle me-1"></i>Reset to default order</button>';
+                } else {
+                    toolbarNotice.innerHTML = 'Order: <strong class="text-dark">Landed &rarr; Expected Date &rarr; Job &rarr; PO</strong>';
+                }
+            }
+        }
+
+        function applySorting() {
+            var currentRows = Array.from(tbody.querySelectorAll('tr.order-log-row'));
+            if (currentRows.length <= 1) return;
+
+            currentRows.sort(function(a, b) {
+                return compareRows(a, b, currentSortKey, currentSortDir);
+            });
+
+            var fragment = document.createDocumentFragment();
+            currentRows.forEach(function(row) {
+                fragment.appendChild(row);
+            });
+            tbody.appendChild(fragment);
+
+            updateSortUI();
+        }
+
+        table.querySelectorAll('th.sortable-col').forEach(function(th) {
+            th.addEventListener('click', function(e) {
+                var key = th.dataset.sortKey;
+                if (!key) return;
+
+                if (currentSortKey !== key) {
+                    currentSortKey = key;
+                    currentSortDir = 'asc';
+                } else {
+                    if (currentSortDir === 'asc') {
+                        currentSortDir = 'desc';
+                    } else if (currentSortDir === 'desc') {
+                        currentSortDir = 'none';
+                        currentSortKey = null;
+                    } else {
+                        currentSortDir = 'asc';
+                    }
+                }
+
+                applySorting();
+            });
+        });
+
+        window.resetTableSorting = function() {
+            currentSortKey = null;
+            currentSortDir = 'none';
+            applySorting();
+        };
+    }
+
+    // -------------------------------------------------------------
+    // Auto-Suggest Dropdowns for Create New Shipment Modal
+    // Vendor Name, PO #, and Job # based on existing data
+    // -------------------------------------------------------------
+    function initCreateShipmentAutoSuggest() {
+        function setupAutoSuggest(cfg) {
+            var input = document.getElementById(cfg.inputId);
+            var toggleBtn = document.getElementById(cfg.toggleBtnId);
+            var icon = document.getElementById(cfg.iconId);
+            var menu = document.getElementById(cfg.menuId);
+            var optionsList = document.getElementById(cfg.optionsListId);
+            var noMatch = document.getElementById(cfg.noMatchId);
+            var matchCount = document.getElementById(cfg.matchCountId);
+            var modalEl = document.getElementById('createShipmentModal');
+
+            if (!input || !menu || !optionsList) return null;
+
+            function openDropdown() {
+                // Close other open auto-suggest dropdowns in modal
+                document.querySelectorAll('#createShipmentModal .dropdown-menu').forEach(function(m) {
+                    if (m !== menu) m.style.display = 'none';
+                });
+                document.querySelectorAll('#createShipmentModal .bi-chevron-up').forEach(function(ic) {
+                    if (ic !== icon) {
+                        ic.classList.remove('bi-chevron-up');
+                        ic.classList.add('bi-chevron-down');
+                    }
+                });
+
+                menu.style.display = 'block';
+                if (icon) {
+                    icon.classList.remove('bi-chevron-down');
+                    icon.classList.add('bi-chevron-up');
+                }
+                filterOptions(input.value);
+            }
+
+            function closeDropdown() {
+                menu.style.display = 'none';
+                if (icon) {
+                    icon.classList.remove('bi-chevron-up');
+                    icon.classList.add('bi-chevron-down');
+                }
+                var items = optionsList.querySelectorAll('.' + cfg.itemClass);
+                items.forEach(function(el) { el.classList.remove('active'); });
+            }
+
+            function filterOptions(query) {
+                var q = (query || '').toLowerCase().trim();
+                var items = optionsList.querySelectorAll('.' + cfg.itemClass);
+                var visibleCount = 0;
+
+                items.forEach(function(item) {
+                    var match = false;
+                    if (!q) {
+                        match = true;
+                    } else {
+                        for (var i = 0; i < cfg.searchFields.length; i++) {
+                            var fieldVal = (item.dataset[cfg.searchFields[i]] || '').toLowerCase();
+                            if (fieldVal.includes(q)) {
+                                match = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (match) {
+                        item.classList.remove('d-none');
+                        visibleCount++;
+                    } else {
+                        item.classList.add('d-none');
+                    }
+
+                    var checkIcon = item.querySelector('.selected-icon');
+                    if (checkIcon) {
+                        var val = (item.dataset.value || '').toLowerCase();
+                        if (q && val === q) {
+                            checkIcon.classList.remove('d-none');
+                        } else {
+                            checkIcon.classList.add('d-none');
+                        }
+                    }
+                });
+
+                if (matchCount) matchCount.innerText = visibleCount;
+                if (noMatch) {
+                    if (visibleCount === 0) {
+                        noMatch.classList.remove('d-none');
+                    } else {
+                        noMatch.classList.add('d-none');
+                    }
+                }
+            }
+
+            function selectItem(item) {
+                var val = item.dataset.value || '';
+                input.value = val;
+                if (typeof cfg.onSelect === 'function') {
+                    cfg.onSelect(item, val);
+                }
+                closeDropdown();
+                input.dispatchEvent(new Event('input'));
+                input.dispatchEvent(new Event('change'));
+            }
+
+            input.addEventListener('focus', function() {
+                openDropdown();
+            });
+
+            input.addEventListener('click', function() {
+                openDropdown();
+            });
+
+            input.addEventListener('input', function() {
+                if (menu.style.display !== 'block') {
+                    openDropdown();
+                } else {
+                    filterOptions(input.value);
+                }
+            });
+
+            input.addEventListener('keydown', function(e) {
+                var visibleItems = Array.from(optionsList.querySelectorAll('.' + cfg.itemClass + ':not(.d-none)'));
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (menu.style.display !== 'block') {
+                        openDropdown();
+                        return;
+                    }
+                    if (visibleItems.length === 0) return;
+                    var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                    var nextIndex = activeIndex < visibleItems.length - 1 ? activeIndex + 1 : 0;
+                    visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                    visibleItems[nextIndex].classList.add('active');
+                    visibleItems[nextIndex].scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (menu.style.display !== 'block') {
+                        openDropdown();
+                        return;
+                    }
+                    if (visibleItems.length === 0) return;
+                    var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                    var prevIndex = activeIndex > 0 ? activeIndex - 1 : visibleItems.length - 1;
+                    visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                    visibleItems[prevIndex].classList.add('active');
+                    visibleItems[prevIndex].scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'Enter') {
+                    if (menu.style.display === 'block') {
+                        var highlighted = visibleItems.find(function(it) { return it.classList.contains('active'); });
+                        if (highlighted) {
+                            e.preventDefault();
+                            selectItem(highlighted);
+                        }
+                    }
+                } else if (e.key === 'Escape') {
+                    closeDropdown();
+                }
+            });
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (menu.style.display === 'block') {
+                        closeDropdown();
+                    } else {
+                        openDropdown();
+                        input.focus();
+                    }
+                });
+            }
+
+            optionsList.addEventListener('click', function(e) {
+                var item = e.target.closest('.' + cfg.itemClass);
+                if (item) {
+                    e.preventDefault();
+                    selectItem(item);
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!menu.contains(e.target) && !input.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+                    closeDropdown();
+                }
+            });
+
+            if (modalEl) {
+                modalEl.addEventListener('hidden.bs.modal', function() {
+                    closeDropdown();
+                });
+            }
+
+            return {
+                open: openDropdown,
+                close: closeDropdown,
+                filter: filterOptions
+            };
+        }
+
+        // 1. Vendor Name Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newVendorNameInput',
+            toggleBtnId: 'newVendorDropdownToggleBtn',
+            iconId: 'newVendorDropdownIcon',
+            menuId: 'newVendorDropdownMenu',
+            optionsListId: 'newVendorOptionsList',
+            noMatchId: 'newVendorNoMatch',
+            matchCountId: 'newVendorMatchCount',
+            itemClass: 'new-vendor-option-item',
+            searchFields: ['value']
+        });
+
+        // 2. PO # Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newPoNumberInput',
+            toggleBtnId: 'newPoDropdownToggleBtn',
+            iconId: 'newPoDropdownIcon',
+            menuId: 'newPoDropdownMenu',
+            optionsListId: 'newPoOptionsList',
+            noMatchId: 'newPoNoMatch',
+            matchCountId: 'newPoMatchCount',
+            itemClass: 'new-po-option-item',
+            searchFields: ['value', 'vendor', 'job'],
+            onSelect: function(item, val) {
+                var vendor = item.dataset.vendor;
+                var job = item.dataset.job;
+                var loadtype = item.dataset.loadtype;
+
+                var vInput = document.getElementById('newVendorNameInput');
+                if (vInput && !vInput.value.trim() && vendor) {
+                    vInput.value = vendor;
+                    vInput.dispatchEvent(new Event('input'));
+                }
+
+                var jInput = document.getElementById('newJobNumberInput');
+                if (jInput && !jInput.value.trim() && job) {
+                    jInput.value = job;
+                    jInput.dispatchEvent(new Event('input'));
+                }
+
+                var ltSelect = document.getElementById('newLoadTypeSelect');
+                if (ltSelect && loadtype) {
+                    for (var i = 0; i < ltSelect.options.length; i++) {
+                        if (ltSelect.options[i].value.toLowerCase() === loadtype.toLowerCase()) {
+                            ltSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // 3. Job # Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newJobNumberInput',
+            toggleBtnId: 'newJobDropdownToggleBtn',
+            iconId: 'newJobDropdownIcon',
+            menuId: 'newJobDropdownMenu',
+            optionsListId: 'newJobOptionsList',
+            noMatchId: 'newJobNoMatch',
+            matchCountId: 'newJobMatchCount',
+            itemClass: 'new-job-option-item',
+            searchFields: ['value', 'client']
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initTableSorting();
+        initCreateShipmentAutoSuggest();
+    });
+</script>
+}

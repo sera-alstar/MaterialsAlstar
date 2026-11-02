@@ -1,0 +1,710 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Materials";
+}
+
+<!-- HubSpot Sub-Header -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a href="#">Inventory</a> <i class="bi bi-chevron-right mx-1 small"></i> 
+        <a href="#">QC &amp; Receiving</a> <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span>Materials</span>
+    </div>
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="hs-page-title">
+                Materials
+                <span class="hs-count-badge" id="totalRecordsBadge">@Model.TotalItems records</span>
+            </h1>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="hs-btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    Actions
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border">
+                    <li><a class="dropdown-item small" href="javascript:void(0)" onclick="exportToCsv()"><i class="bi bi-download me-2 text-muted"></i>Export current view</a></li>
+                    <li><a class="dropdown-item small" href="javascript:void(0)"><i class="bi bi-layout-three-columns me-2 text-muted"></i>Edit columns</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small text-danger" href="javascript:void(0)"><i class="bi bi-trash me-2"></i>Delete view</a></li>
+                </ul>
+            </div>
+            <button class="hs-btn-secondary" type="button"><i class="bi bi-upload me-1"></i> Import</button>
+            <button class="hs-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createMaterialModal">
+                <i class="bi bi-plus-lg"></i> Create material
+            </button>
+        </div>
+    </div>
+
+    <!-- HubSpot Saved View Tabs -->
+    <div class="hs-views-bar">
+        <button class="hs-view-tab active" data-view="all" onclick="selectViewTab(this, 'all')">
+            <i class="bi bi-table"></i> All materials <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@Model.TotalItems</span>
+        </button>
+        <button class="hs-view-tab" data-view="251078" onclick="selectViewTab(this, '251078')">
+            Job 251078 <span class="badge bg-secondary-subtle text-secondary small rounded-pill ms-1">@(Model.Materials.Count(m => m.JobNumber == "251078" || m.JobNumber == "251078C"))</span>
+        </button>
+        <button class="hs-add-view-btn" type="button"><i class="bi bi-plus"></i> Add view</button>
+    </div>
+</div>
+
+<!-- HubSpot Filter & Search Toolbar -->
+<div class="hs-toolbar">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <!-- Search Box -->
+        <div class="hs-search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" id="hsSearchInput" oninput="applyAllFilters()" class="form-control form-control-sm" placeholder="Search all properties...">
+        </div>
+
+        <!-- Filter Chips -->
+        <div class="hs-filter-chips">
+            <!-- Job Filter Dropdown -->
+            <div class="dropdown">
+                <button class="hs-filter-btn dropdown-toggle" id="jobFilterBtn" type="button" data-bs-toggle="dropdown">
+                    <span class="text-muted">Job:</span> <span id="jobFilterLabel">All</span>
+                </button>
+                <ul class="dropdown-menu shadow-sm" id="jobDropdownMenu">
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('job', '', 'All', this)">All Jobs</a></li>
+                    @foreach (var job in Model.JobOptions)
+                    {
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('job', '@job', 'Job @job', this)">Job @job</a></li>
+                    }
+                </ul>
+            </div>
+
+            <!-- Vendor Filter Dropdown -->
+            <div class="dropdown">
+                <button class="hs-filter-btn dropdown-toggle" id="vendorFilterBtn" type="button" data-bs-toggle="dropdown">
+                    <span class="text-muted">Vendor:</span> <span id="vendorFilterLabel">All</span>
+                </button>
+                <ul class="dropdown-menu shadow-sm" id="vendorDropdownMenu">
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('vendor', '', 'All', this)">All Vendors</a></li>
+                    @foreach (var vendor in Model.VendorOptions)
+                    {
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('vendor', '@vendor', '@vendor', this)">@vendor</a></li>
+                    }
+                </ul>
+            </div>
+
+            <!-- Bin Location Filter Dropdown -->
+            <div class="dropdown">
+                <button class="hs-filter-btn dropdown-toggle" id="binFilterBtn" type="button" data-bs-toggle="dropdown">
+                    <span class="text-muted">Bin:</span> <span id="binFilterLabel">All</span>
+                </button>
+                <ul class="dropdown-menu shadow-sm" id="binDropdownMenu">
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('bin', '', 'All', this)">All Bins</a></li>
+                    @foreach (var bin in Model.BinOptions)
+                    {
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('bin', '@bin', 'Bin @bin', this)">Bin @bin</a></li>
+                    }
+                </ul>
+            </div>
+
+            <!-- Heat Number Filter Dropdown -->
+            <div class="dropdown">
+                <button class="hs-filter-btn dropdown-toggle" id="heatFilterBtn" type="button" data-bs-toggle="dropdown">
+                    <span class="text-muted">Heat #:</span> <span id="heatFilterLabel">All</span>
+                </button>
+                <ul class="dropdown-menu shadow-sm" id="heatDropdownMenu">
+                    <li><a class="dropdown-item small active" href="javascript:void(0)" onclick="setFilter('heat', '', 'All', this)">All Heat #s</a></li>
+                    @foreach (var heat in Model.HeatOptions)
+                    {
+                        <li><a class="dropdown-item small" href="javascript:void(0)" onclick="setFilter('heat', '@heat', '@heat', this)">🔥 @heat</a></li>
+                    }
+                </ul>
+            </div>
+
+            <button class="hs-filter-btn text-muted" id="hsResetFilters" onclick="resetAllFilters()" type="button" title="Clear all filters">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Count Display -->
+    <div class="text-muted small">
+        Showing <strong id="hsVisibleCount" class="text-dark">@Model.TotalItems</strong> of @Model.TotalItems materials
+    </div>
+</div>
+
+<!-- Floating Bulk Actions Bar (HubSpot style) -->
+<div class="hs-bulk-actions" id="hsBulkActions">
+    <div class="d-flex align-items-center gap-3">
+        <span class="fw-bold fs-6"><span id="hsSelectedCount">0</span> materials selected</span>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Bulk Edit selected records')"><i class="bi bi-pencil me-1"></i> Edit</button>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Bulk Assign Bin to selected records')"><i class="bi bi-box-arrow-in-right me-1"></i> Assign Bin</button>
+        <button class="btn btn-sm btn-light py-1 px-3 text-dark fw-semibold" type="button" onclick="alert('Marked selected records as Verified')"><i class="bi bi-check2-circle me-1"></i> Mark Verified</button>
+        <button class="btn btn-sm btn-outline-light py-1 px-3 fw-semibold" type="button" onclick="exportToCsv()"><i class="bi bi-download me-1"></i> Export Selected</button>
+    </div>
+    <div>
+        <button class="btn btn-sm btn-link text-white text-decoration-none" id="hsDeselectAll" onclick="deselectAllRows()" type="button">Deselect all</button>
+    </div>
+</div>
+
+<!-- HubSpot CRM Table -->
+<div class="hs-table-container">
+    <div class="table-responsive">
+        <table class="hs-table" id="hsMaterialsTable">
+            <thead>
+                <tr>
+                    <th style="width: 40px;" class="text-center">
+                        <input type="checkbox" class="form-check-input" id="hsSelectAll" onchange="handleSelectAllChange(this)">
+                    </th>
+                    <th style="min-width: 260px;">Description</th>
+                    <th style="min-width: 140px;">BOMID</th>
+                    <th style="min-width: 90px;">Job #</th>
+                    <th style="min-width: 150px;">PO # / Receiver</th>
+                    <th style="min-width: 190px;">Vendor</th>
+                    <th style="min-width: 130px;">Heat # (MTR)</th>
+                    <th style="min-width: 110px;">Bin Location</th>
+                    <th class="text-center" style="min-width: 100px;">Units (Recv/Ship)</th>
+                    <th style="min-width: 110px;">Status</th>
+                    <th style="width: 60px;" class="text-end">Preview</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.Materials)
+                {
+                    <tr class="hs-row"
+                        onclick="openDrawerFromRow(this)"
+                        data-id="@item.Id"
+                        data-job="@item.JobNumber"
+                        data-po="@item.PoNumber"
+                        data-receiver="@item.ReceiverId"
+                        data-vendor="@item.VendorName"
+                        data-desc="@item.Description"
+                        data-bomid="@item.BomId"
+                        data-qty-ship="@item.QuantityShipped.ToString("0")"
+                        data-qty-recv="@item.QuantityReceived.ToString("0")"
+                        data-unit="@item.Unit"
+                        data-heat="@item.HeatNumber"
+                        data-bin="@item.BinLocation"
+                        data-recv-by="@item.ReceivedBy"
+                        data-recv-date="@(item.ReceivedDate?.ToString("MMM dd, yyyy") ?? "-")"
+                        data-status="@item.Status">
+                        
+                        <!-- Checkbox -->
+                        <td class="text-center" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="form-check-input hs-row-checkbox" onchange="handleRowCheckboxChange(this)">
+                        </td>
+
+                        <!-- Material Description (Click opens HubSpot Drawer) -->
+                        <td>
+                            <a href="javascript:void(0)" class="hs-primary-link hs-open-drawer">
+                                @item.Description
+                            </a>
+                        </td>
+
+                        <!-- BOMID -->
+                        <td>
+                            <span class="badge bg-light text-dark border font-monospace">@item.BomId</span>
+                        </td>
+
+                        <!-- Job # -->
+                        <td>
+                            <span class="hs-badge-job font-monospace">@item.JobNumber</span>
+                        </td>
+
+                        <!-- PO # & Receiver -->
+                        <td>
+                            <div class="fw-semibold font-monospace small">@item.PoNumber</div>
+                            <div class="text-muted small">Rec: @item.ReceiverId</div>
+                        </td>
+
+                        <!-- Vendor -->
+                        <td>
+                            <span class="text-truncate d-inline-block text-secondary small" style="max-width: 180px;" title="@item.VendorName">
+                                @item.VendorName
+                            </span>
+                        </td>
+
+                        <!-- Heat Number (MTR) -->
+                        <td>
+                            <span class="hs-badge-heat font-monospace">
+                                🔥 @item.HeatNumber
+                            </span>
+                        </td>
+
+                        <!-- Bin Location -->
+                        <td>
+                            <span class="hs-badge-bin font-monospace">
+                                📦 @item.BinLocation
+                            </span>
+                        </td>
+
+                        <!-- Qty Received vs Shipped -->
+                        <td class="text-center">
+                            <strong class="text-success">@item.QuantityReceived.ToString("0")</strong>
+                            <span class="text-muted small">/ @item.QuantityShipped.ToString("0") @item.Unit</span>
+                        </td>
+
+                        <!-- Status -->
+                        <td>
+                            <span class="hs-badge-status">
+                                ● @item.Status
+                            </span>
+                        </td>
+
+                        <!-- Quick Preview Action Button -->
+                        <td class="text-end" onclick="event.stopPropagation();">
+                            <button class="btn btn-sm btn-link text-muted p-0" onclick="openDrawerFromRow(this.closest('tr'))" title="Quick view details">
+                                <i class="bi bi-chevron-right fs-6"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- HubSpot Pagination Footer -->
+    <div class="hs-pagination-bar">
+        <div>
+            Showing <strong id="hsFooterCount">@Model.TotalItems</strong> of @Model.TotalItems materials
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small">10 per page</span>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary disabled" type="button"><i class="bi bi-chevron-left"></i></button>
+                <button class="btn btn-outline-secondary active" type="button">1</button>
+                <button class="btn btn-outline-secondary disabled" type="button"><i class="bi bi-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================
+     HubSpot Slide-out Drawer (Side Panel)
+     ======================================================== -->
+<div class="hs-drawer-backdrop" id="hsDrawerBackdrop" onclick="closeMaterialDrawer()"></div>
+
+<div class="hs-drawer" id="hsDrawer">
+    <!-- Drawer Header -->
+    <div class="hs-drawer-header">
+        <div>
+            <span class="badge bg-secondary-subtle text-secondary small mb-1" id="drawerJobBadge">Job -</span>
+            <h5 class="mb-0 fw-bold text-dark text-truncate" style="max-width: 380px;" id="drawerTitle">Material Name</h5>
+            <small class="text-muted font-monospace" id="drawerBOMID">BOMID: -</small>
+        </div>
+        <button class="btn-close" id="hsCloseDrawer" onclick="closeMaterialDrawer()" type="button" aria-label="Close"></button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="hs-drawer-body">
+        <!-- Quick Status Card -->
+        <div class="card border-0 bg-light p-3 mb-4 rounded-3">
+            <div class="row g-2 text-center">
+                <div class="col-4 border-end">
+                    <div class="text-muted small text-uppercase">Heat #</div>
+                    <div class="fw-bold text-danger font-monospace fs-6" id="drawerHeat">-</div>
+                </div>
+                <div class="col-4 border-end">
+                    <div class="text-muted small text-uppercase">Bin</div>
+                    <div class="fw-bold text-primary font-monospace fs-6" id="drawerBin">-</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted small text-uppercase">Recv'd</div>
+                    <div class="fw-bold text-success fs-6" id="drawerQty">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Property Group: Identification -->
+        <div class="hs-property-group">
+            <div class="hs-property-group-title">
+                <i class="bi bi-info-circle text-coral"></i> Core Properties
+            </div>
+            
+            <div class="hs-property-field">
+                <div class="hs-property-label">Material Description</div>
+                <div class="hs-property-value" id="drawerDesc">-</div>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">BOMID</div>
+                    <div class="hs-property-value font-monospace" id="drawerBomIdVal">-</div>
+                </div>
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Job Number</div>
+                    <div class="hs-property-value font-monospace" id="drawerJob">-</div>
+                </div>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">PO Number</div>
+                    <div class="hs-property-value font-monospace" id="drawerPo">-</div>
+                </div>
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Receiver Sequence</div>
+                    <div class="hs-property-value font-monospace" id="drawerReceiver">-</div>
+                </div>
+            </div>
+
+            <div class="hs-property-field">
+                <div class="hs-property-label">Vendor Name</div>
+                <div class="hs-property-value" id="drawerVendor">-</div>
+            </div>
+        </div>
+
+        <!-- Property Group: QC & Traceability -->
+        <div class="hs-property-group">
+            <div class="hs-property-group-title">
+                <i class="bi bi-shield-check text-coral"></i> Quality Control &amp; Traceability
+            </div>
+
+            <div class="hs-property-field">
+                <div class="hs-property-label">MTR Heat Number</div>
+                <div class="hs-property-value font-monospace text-danger" id="drawerHeatFull">-</div>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Warehouse Bin Location</div>
+                    <div class="hs-property-value font-monospace text-primary" id="drawerBinFull">-</div>
+                </div>
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Receiving Status</div>
+                    <div class="hs-property-value text-success" id="drawerStatus">-</div>
+                </div>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Received By</div>
+                    <div class="hs-property-value" id="drawerRecvBy">-</div>
+                </div>
+                <div class="col-6 hs-property-field">
+                    <div class="hs-property-label">Date Received</div>
+                    <div class="hs-property-value" id="drawerRecvDate">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drawer Footer Actions -->
+    <div class="hs-drawer-footer">
+        <button class="btn btn-outline-secondary btn-sm" id="drawerCloseBtn" onclick="closeMaterialDrawer()" type="button">Close</button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm" type="button" onclick="alert('Printing Bin Tag label...')"><i class="bi bi-printer me-1"></i> Print Bin Tag</button>
+            <button class="hs-btn-primary btn-sm py-1" type="button" onclick="alert('Editing material properties...')"><i class="bi bi-pencil me-1"></i> Edit Record</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================
+     HubSpot "Create Material" Modal
+     ======================================================== -->
+<div class="modal fade" id="createMaterialModal" tabindex="-1" aria-labelledby="createMaterialModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-bottom">
+                <h6 class="modal-title fw-bold" id="createMaterialModalLabel">Create Material Receiving Record</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="createMaterialForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Material Description</label>
+                        <input type="text" class="form-control" placeholder="e.g. 2&quot; BW Cap XXS A234-WPB" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Job #</label>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. 251078" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">BOMID</label>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. CAP2-XX234" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">PO #</label>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. 251078C0430" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Receiver ID</label>
+                            <input type="text" class="form-control font-monospace" placeholder="e.g. C0430">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Vendor Name</label>
+                        <input type="text" class="form-control" placeholder="e.g. Trans Am Piping Products Ltd">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Heat Number (MTR)</label>
+                            <input type="text" class="form-control font-monospace text-danger" placeholder="e.g. EV630" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Bin Location</label>
+                            <input type="text" class="form-control font-monospace text-primary" placeholder="e.g. 4E21" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Quantity Received</label>
+                            <input type="number" class="form-control" value="1" min="1" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Unit</label>
+                            <input type="text" class="form-control" value="EA" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light border-top">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="hs-btn-primary btn-sm" onclick="alert('Record creation will be wired to the backend API next!'); $('#createMaterialModal').modal('hide');">
+                    Save Material
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Global filter state
+    let activeView = "all";
+    let filterJob = "";
+    let filterVendor = "";
+    let filterBin = "";
+    let filterHeat = "";
+
+    // 1. Open HubSpot Slide-out Drawer
+    function openDrawerFromRow(el) {
+        const row = el.closest ? el.closest(".hs-row") : el;
+        if (!row) return;
+
+        const data = row.dataset;
+        document.getElementById("drawerJobBadge").textContent = `Job ${data.job || "N/A"}`;
+        document.getElementById("drawerTitle").textContent = data.desc || "Material Item";
+        document.getElementById("drawerBOMID").textContent = `BOMID: ${data.bomid || "N/A"}`;
+
+        document.getElementById("drawerHeat").textContent = data.heat || "-";
+        document.getElementById("drawerBin").textContent = data.bin || "-";
+        document.getElementById("drawerQty").textContent = `${data.qtyRecv || 0} ${data.unit || "EA"}`;
+
+        document.getElementById("drawerDesc").textContent = data.desc || "-";
+        document.getElementById("drawerBomIdVal").textContent = data.bomid || "-";
+        document.getElementById("drawerJob").textContent = data.job || "-";
+        document.getElementById("drawerPo").textContent = data.po || "-";
+        document.getElementById("drawerReceiver").textContent = data.receiver || "-";
+        document.getElementById("drawerVendor").textContent = data.vendor || "-";
+
+        document.getElementById("drawerHeatFull").textContent = `🔥 ${data.heat || "None"}`;
+        document.getElementById("drawerBinFull").textContent = `📦 ${data.bin || "Unassigned"}`;
+        document.getElementById("drawerStatus").textContent = `● ${data.status || "Received"}`;
+        document.getElementById("drawerRecvBy").textContent = data.recvBy || "-";
+        document.getElementById("drawerRecvDate").textContent = data.recvDate || "-";
+
+        const drawer = document.getElementById("hsDrawer");
+        const backdrop = document.getElementById("hsDrawerBackdrop");
+        if (drawer) drawer.classList.add("active");
+        if (backdrop) backdrop.classList.add("active");
+    }
+
+    // 2. Close Drawer
+    function closeMaterialDrawer() {
+        const drawer = document.getElementById("hsDrawer");
+        const backdrop = document.getElementById("hsDrawerBackdrop");
+        if (drawer) drawer.classList.remove("active");
+        if (backdrop) backdrop.classList.remove("active");
+    }
+
+    // 3. Row Checkbox & Bulk Actions
+    function handleRowCheckboxChange(cb) {
+        const tr = cb.closest("tr");
+        if (cb.checked) {
+            tr?.classList.add("selected");
+        } else {
+            tr?.classList.remove("selected");
+        }
+        updateBulkBar();
+    }
+
+    function handleSelectAllChange(master) {
+        const isChecked = master.checked;
+        document.querySelectorAll(".hs-row-checkbox").forEach(cb => {
+            const tr = cb.closest("tr");
+            if (tr && tr.style.display !== "none") {
+                cb.checked = isChecked;
+                if (isChecked) tr.classList.add("selected");
+                else tr.classList.remove("selected");
+            }
+        });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checkedBoxes = document.querySelectorAll(".hs-row-checkbox:checked");
+        const count = checkedBoxes.length;
+        const bar = document.getElementById("hsBulkActions");
+        const countSpan = document.getElementById("hsSelectedCount");
+        const selectAll = document.getElementById("hsSelectAll");
+
+        if (countSpan) countSpan.textContent = count;
+        if (bar) {
+            if (count > 0) {
+                bar.classList.add("active");
+            } else {
+                bar.classList.remove("active");
+            }
+        }
+        const visibleBoxes = Array.from(document.querySelectorAll(".hs-row-checkbox"))
+            .filter(cb => cb.closest("tr") && cb.closest("tr").style.display !== "none");
+        
+        if (selectAll && visibleBoxes.length > 0) {
+            selectAll.checked = count > 0 && count === visibleBoxes.length;
+            selectAll.indeterminate = count > 0 && count < visibleBoxes.length;
+        }
+    }
+
+    function deselectAllRows() {
+        document.querySelectorAll(".hs-row-checkbox").forEach(cb => {
+            cb.checked = false;
+            cb.closest("tr")?.classList.remove("selected");
+        });
+        const selectAll = document.getElementById("hsSelectAll");
+        if (selectAll) selectAll.checked = false;
+        updateBulkBar();
+    }
+
+    // 4. View Tabs
+    function selectViewTab(tabEl, viewVal) {
+        document.querySelectorAll(".hs-view-tab").forEach(t => t.classList.remove("active"));
+        tabEl.classList.add("active");
+        activeView = viewVal;
+        applyAllFilters();
+    }
+
+    // 5. Dropdown Filter Chips
+    function setFilter(type, val, displayLabel, anchorEl) {
+        const menu = anchorEl.closest(".dropdown-menu");
+        menu.querySelectorAll("a").forEach(a => a.classList.remove("active"));
+        anchorEl.classList.add("active");
+
+        const btn = document.getElementById(`${type}FilterBtn`);
+        const label = document.getElementById(`${type}FilterLabel`);
+        if (label) label.textContent = displayLabel.replace("🔥 ", "").replace("Job ", "").replace("Bin ", "");
+        if (btn) {
+            if (val) btn.classList.add("active");
+            else btn.classList.remove("active");
+        }
+
+        if (type === "job") filterJob = val;
+        if (type === "vendor") filterVendor = val;
+        if (type === "bin") filterBin = val;
+        if (type === "heat") filterHeat = val;
+
+        applyAllFilters();
+    }
+
+    // 6. Multi-filter & Search Logic
+    function applyAllFilters() {
+        const searchInput = document.getElementById("hsSearchInput");
+        const query = (searchInput?.value || "").toLowerCase().trim();
+        const rows = document.querySelectorAll(".hs-row");
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const d = row.dataset;
+            const job = d.job || "";
+            const po = (d.po || "").toLowerCase();
+            const receiver = (d.receiver || "").toLowerCase();
+            const vendor = d.vendor || "";
+            const desc = (d.desc || "").toLowerCase();
+            const bomid = (d.bomid || "").toLowerCase();
+            const heat = d.heat || "";
+            const bin = d.bin || "";
+
+            // View check
+            let matchesView = true;
+            if (activeView !== "all" && job !== activeView && !job.startsWith(activeView)) {
+                matchesView = false;
+            }
+
+            // Dropdown checks
+            const matchesJob = !filterJob || job === filterJob;
+            const matchesVendor = !filterVendor || vendor === filterVendor;
+            const matchesBin = !filterBin || bin === filterBin;
+            const matchesHeat = !filterHeat || heat === filterHeat;
+
+            // Query check
+            const matchesQuery = !query ||
+                job.toLowerCase().includes(query) ||
+                po.includes(query) ||
+                receiver.includes(query) ||
+                vendor.toLowerCase().includes(query) ||
+                desc.includes(query) ||
+                bomid.includes(query) ||
+                heat.toLowerCase().includes(query) ||
+                bin.toLowerCase().includes(query);
+
+            if (matchesView && matchesJob && matchesVendor && matchesBin && matchesHeat && matchesQuery) {
+                row.style.display = "";
+                visibleCount++;
+            } else {
+                row.style.display = "none";
+                const cb = row.querySelector(".hs-row-checkbox");
+                if (cb) {
+                    cb.checked = false;
+                    row.classList.remove("selected");
+                }
+            }
+        });
+
+        const visibleSpan = document.getElementById("hsVisibleCount");
+        const footerSpan = document.getElementById("hsFooterCount");
+        if (visibleSpan) visibleSpan.textContent = visibleCount;
+        if (footerSpan) footerSpan.textContent = visibleCount;
+        updateBulkBar();
+    }
+
+    // 7. Reset Filters
+    function resetAllFilters() {
+        const searchInput = document.getElementById("hsSearchInput");
+        if (searchInput) searchInput.value = "";
+        filterJob = "";
+        filterVendor = "";
+        filterBin = "";
+        filterHeat = "";
+
+        document.getElementById("jobFilterLabel").textContent = "All";
+        document.getElementById("vendorFilterLabel").textContent = "All";
+        document.getElementById("binFilterLabel").textContent = "All";
+        document.getElementById("heatFilterLabel").textContent = "All";
+
+        document.querySelectorAll(".hs-filter-btn").forEach(btn => btn.classList.remove("active"));
+        document.querySelectorAll(".dropdown-menu a").forEach(a => a.classList.remove("active"));
+        document.querySelectorAll(".dropdown-menu li:first-child a").forEach(a => a.classList.add("active"));
+
+        const firstTab = document.querySelector(".hs-view-tab");
+        if (firstTab) selectViewTab(firstTab, "all");
+        else applyAllFilters();
+    }
+
+    // 8. CSV Export
+    function exportToCsv() {
+        let csv = "Job #,PO #,Receiver ID,BOMID,Description,Vendor,Heat #,Bin Location,Qty Shipped,Qty Received,Unit,Status\n";
+        document.querySelectorAll(".hs-row").forEach(row => {
+            if (row.style.display !== "none") {
+                const d = row.dataset;
+                csv += `"${d.job}","${d.po}","${d.receiver}","${d.bomid}","${d.desc}","${d.vendor}","${d.heat}","${d.bin}","${d.qtyShip}","${d.qtyRecv}","${d.unit}","${d.status}"\n`;
+            }
+        });
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `MaterialsAlstar_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+}
