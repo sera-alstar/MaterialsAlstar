@@ -778,22 +778,141 @@
                     <div class="row g-3">
                         <!-- Vendor Name (Required) -->
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Vendor Name <span class="text-danger">*</span></label>
-                            <input type="text" name="vendorName" class="form-control" required placeholder="e.g. Spartan Controls, CFP Industries" />
+                            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+                                <span>Vendor Name <span class="text-danger">*</span></span>
+                                <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingVendors.Count existing vendors</span>
+                            </label>
+                            <div class="position-relative" id="newVendorDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-building"></i></span>
+                                    <input type="text" name="vendorName" id="newVendorNameInput" class="form-control" required
+                                           placeholder="Search or enter vendor name..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newVendorDropdownToggleBtn" title="Toggle vendor suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newVendorDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newVendorDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing Vendors</span>
+                                        <span id="newVendorMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingVendors.Count</span>
+                                    </div>
+                                    <div id="newVendorOptionsList">
+                                        @foreach (var v in Model.ExistingVendors)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-vendor-option-item"
+                                                    data-value="@v">
+                                                <span class="fw-semibold text-dark">@v</span>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newVendorNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing vendors found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter a new vendor.</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- PO # (Required) -->
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">PO # <span class="text-danger">*</span></label>
-                            <input type="text" name="poNumber" id="newPoNumberInput" class="form-control font-monospace" required placeholder="e.g. 0285 or PO-9912" />
+                            <label class="form-label fw-semibold small d-flex justify-content-between align-items-center">
+                                <span>PO # <span class="text-danger">*</span></span>
+                                <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingPOs.Count existing POs</span>
+                            </label>
+                            <div class="position-relative" id="newPoDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-receipt"></i></span>
+                                    <input type="text" name="poNumber" id="newPoNumberInput" class="form-control font-monospace" required
+                                           placeholder="Search or enter PO #..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newPoDropdownToggleBtn" title="Toggle PO suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newPoDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newPoDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing PO Numbers</span>
+                                        <span id="newPoMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingPOs.Count</span>
+                                    </div>
+                                    <div id="newPoOptionsList">
+                                        @foreach (var p in Model.ExistingPOs)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-po-option-item"
+                                                    data-value="@p.PoNumber"
+                                                    data-vendor="@(p.VendorName ?? "")"
+                                                    data-job="@(p.JobNumber ?? "")"
+                                                    data-loadtype="@(p.LoadType ?? "")">
+                                                <div>
+                                                    <span class="fw-bold font-monospace text-dark">@p.PoNumber</span>
+                                                    @if (!string.IsNullOrEmpty(p.VendorName))
+                                                    {
+                                                        <span class="text-muted small ms-2"><i class="bi bi-building me-1"></i>@p.VendorName</span>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(p.JobNumber))
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-dark border ms-1 font-monospace" style="font-size: 10px;">@p.JobNumber</span>
+                                                    }
+                                                </div>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newPoNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing POs found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter an unscheduled PO.</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Job # (Optional - Client Supplied Notice) -->
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">
-                                Job # <span class="badge bg-secondary-subtle text-secondary fw-normal">Optional</span>
+                                <span class="d-flex justify-content-between align-items-center w-100">
+                                    <span>Job # <span class="badge bg-secondary-subtle text-secondary fw-normal">Optional</span></span>
+                                    <span class="text-muted fw-normal" style="font-size: 11px;">@Model.ExistingJobs.Count existing jobs</span>
+                                </span>
                             </label>
-                            <input type="text" name="jobNumber" id="newJobNumberInput" class="form-control font-monospace" placeholder="e.g. 251078C (Leave blank if unknown / client supplied)" />
+                            <div class="position-relative" id="newJobDropdownWrapper">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted"><i class="bi bi-briefcase"></i></span>
+                                    <input type="text" name="jobNumber" id="newJobNumberInput" class="form-control font-monospace"
+                                           placeholder="Search or enter Job # (or leave blank)..." autocomplete="off" />
+                                    <button class="btn btn-outline-secondary" type="button" id="newJobDropdownToggleBtn" title="Toggle job suggestions" tabindex="-1">
+                                        <i class="bi bi-chevron-down" id="newJobDropdownIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div id="newJobDropdownMenu" class="dropdown-menu shadow-sm w-100 p-0" style="max-height: 220px; overflow-y: auto; position: absolute; z-index: 1060; display: none; top: 100%; left: 0;">
+                                    <div class="px-3 py-1 bg-light border-bottom text-muted small d-flex justify-content-between align-items-center sticky-top">
+                                        <span>Existing Jobs</span>
+                                        <span id="newJobMatchCount" class="badge bg-secondary-subtle text-secondary">@Model.ExistingJobs.Count</span>
+                                    </div>
+                                    <div id="newJobOptionsList">
+                                        @foreach (var j in Model.ExistingJobs)
+                                        {
+                                            <button type="button" class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom border-light new-job-option-item"
+                                                    data-value="@j.JobNumber"
+                                                    data-client="@(j.ClientName ?? "")">
+                                                <div>
+                                                    <span class="fw-bold font-monospace text-dark">@j.JobNumber</span>
+                                                    @if (!string.IsNullOrEmpty(j.ClientName))
+                                                    {
+                                                        <span class="badge bg-secondary-subtle text-dark border ms-2 small">@j.ClientName</span>
+                                                    }
+                                                </div>
+                                                <i class="bi bi-check-lg text-primary d-none selected-icon"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div id="newJobNoMatch" class="p-3 text-center text-muted small d-none">
+                                        <i class="bi bi-info-circle me-1 text-primary"></i>No matching existing jobs found.<br />
+                                        <span class="text-secondary" style="font-size: 11px;">You can keep typing to enter a new Job #.</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-text small text-muted">
                                 If client-supplied or unknown, leave blank. The Materials Admin will assign the Job #.
                             </div>
@@ -814,7 +933,7 @@
                         <!-- Load Type (Required) -->
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">Load Type <span class="text-danger">*</span></label>
-                            <select name="loadType" class="form-select" required>
+                            <select name="loadType" id="newLoadTypeSelect" class="form-select" required>
                                 <option value="SNG / Bolt-Up">🔩 SNG / Bolt-Up (Studs, Nuts, Gaskets)</option>
                                 <option value="Pipe">📏 Pipe</option>
                                 <option value="Valves">🚰 Valves</option>
@@ -1109,6 +1228,22 @@
             }
         }
 
+        // If PO is pre-filled, check for matching existing PO to auto-suggest vendor/job
+        var poVal = (document.getElementById('newPoNumberInput').value || '').trim();
+        if (poVal) {
+            var matchingPoEl = document.querySelector('#newPoOptionsList .new-po-option-item[data-value="' + CSS.escape(poVal) + '"]');
+            if (matchingPoEl) {
+                var vInput = document.getElementById('newVendorNameInput');
+                var jInput = document.getElementById('newJobNumberInput');
+                if (vInput && !vInput.value && matchingPoEl.dataset.vendor) {
+                    vInput.value = matchingPoEl.dataset.vendor;
+                }
+                if (jInput && !jInput.value && matchingPoEl.dataset.job) {
+                    jInput.value = matchingPoEl.dataset.job;
+                }
+            }
+        }
+
         var modal = new bootstrap.Modal(document.getElementById('createShipmentModal'));
         modal.show();
     }
@@ -1302,8 +1437,276 @@
         };
     }
 
+    // -------------------------------------------------------------
+    // Auto-Suggest Dropdowns for Create New Shipment Modal
+    // Vendor Name, PO #, and Job # based on existing data
+    // -------------------------------------------------------------
+    function initCreateShipmentAutoSuggest() {
+        function setupAutoSuggest(cfg) {
+            var input = document.getElementById(cfg.inputId);
+            var toggleBtn = document.getElementById(cfg.toggleBtnId);
+            var icon = document.getElementById(cfg.iconId);
+            var menu = document.getElementById(cfg.menuId);
+            var optionsList = document.getElementById(cfg.optionsListId);
+            var noMatch = document.getElementById(cfg.noMatchId);
+            var matchCount = document.getElementById(cfg.matchCountId);
+            var modalEl = document.getElementById('createShipmentModal');
+
+            if (!input || !menu || !optionsList) return null;
+
+            function openDropdown() {
+                // Close other open auto-suggest dropdowns in modal
+                document.querySelectorAll('#createShipmentModal .dropdown-menu').forEach(function(m) {
+                    if (m !== menu) m.style.display = 'none';
+                });
+                document.querySelectorAll('#createShipmentModal .bi-chevron-up').forEach(function(ic) {
+                    if (ic !== icon) {
+                        ic.classList.remove('bi-chevron-up');
+                        ic.classList.add('bi-chevron-down');
+                    }
+                });
+
+                menu.style.display = 'block';
+                if (icon) {
+                    icon.classList.remove('bi-chevron-down');
+                    icon.classList.add('bi-chevron-up');
+                }
+                filterOptions(input.value);
+            }
+
+            function closeDropdown() {
+                menu.style.display = 'none';
+                if (icon) {
+                    icon.classList.remove('bi-chevron-up');
+                    icon.classList.add('bi-chevron-down');
+                }
+                var items = optionsList.querySelectorAll('.' + cfg.itemClass);
+                items.forEach(function(el) { el.classList.remove('active'); });
+            }
+
+            function filterOptions(query) {
+                var q = (query || '').toLowerCase().trim();
+                var items = optionsList.querySelectorAll('.' + cfg.itemClass);
+                var visibleCount = 0;
+
+                items.forEach(function(item) {
+                    var match = false;
+                    if (!q) {
+                        match = true;
+                    } else {
+                        for (var i = 0; i < cfg.searchFields.length; i++) {
+                            var fieldVal = (item.dataset[cfg.searchFields[i]] || '').toLowerCase();
+                            if (fieldVal.includes(q)) {
+                                match = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (match) {
+                        item.classList.remove('d-none');
+                        visibleCount++;
+                    } else {
+                        item.classList.add('d-none');
+                    }
+
+                    var checkIcon = item.querySelector('.selected-icon');
+                    if (checkIcon) {
+                        var val = (item.dataset.value || '').toLowerCase();
+                        if (q && val === q) {
+                            checkIcon.classList.remove('d-none');
+                        } else {
+                            checkIcon.classList.add('d-none');
+                        }
+                    }
+                });
+
+                if (matchCount) matchCount.innerText = visibleCount;
+                if (noMatch) {
+                    if (visibleCount === 0) {
+                        noMatch.classList.remove('d-none');
+                    } else {
+                        noMatch.classList.add('d-none');
+                    }
+                }
+            }
+
+            function selectItem(item) {
+                var val = item.dataset.value || '';
+                input.value = val;
+                if (typeof cfg.onSelect === 'function') {
+                    cfg.onSelect(item, val);
+                }
+                closeDropdown();
+                input.dispatchEvent(new Event('input'));
+                input.dispatchEvent(new Event('change'));
+            }
+
+            input.addEventListener('focus', function() {
+                openDropdown();
+            });
+
+            input.addEventListener('click', function() {
+                openDropdown();
+            });
+
+            input.addEventListener('input', function() {
+                if (menu.style.display !== 'block') {
+                    openDropdown();
+                } else {
+                    filterOptions(input.value);
+                }
+            });
+
+            input.addEventListener('keydown', function(e) {
+                var visibleItems = Array.from(optionsList.querySelectorAll('.' + cfg.itemClass + ':not(.d-none)'));
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (menu.style.display !== 'block') {
+                        openDropdown();
+                        return;
+                    }
+                    if (visibleItems.length === 0) return;
+                    var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                    var nextIndex = activeIndex < visibleItems.length - 1 ? activeIndex + 1 : 0;
+                    visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                    visibleItems[nextIndex].classList.add('active');
+                    visibleItems[nextIndex].scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (menu.style.display !== 'block') {
+                        openDropdown();
+                        return;
+                    }
+                    if (visibleItems.length === 0) return;
+                    var activeIndex = visibleItems.findIndex(function(it) { return it.classList.contains('active'); });
+                    var prevIndex = activeIndex > 0 ? activeIndex - 1 : visibleItems.length - 1;
+                    visibleItems.forEach(function(it) { it.classList.remove('active'); });
+                    visibleItems[prevIndex].classList.add('active');
+                    visibleItems[prevIndex].scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'Enter') {
+                    if (menu.style.display === 'block') {
+                        var highlighted = visibleItems.find(function(it) { return it.classList.contains('active'); });
+                        if (highlighted) {
+                            e.preventDefault();
+                            selectItem(highlighted);
+                        }
+                    }
+                } else if (e.key === 'Escape') {
+                    closeDropdown();
+                }
+            });
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (menu.style.display === 'block') {
+                        closeDropdown();
+                    } else {
+                        openDropdown();
+                        input.focus();
+                    }
+                });
+            }
+
+            optionsList.addEventListener('click', function(e) {
+                var item = e.target.closest('.' + cfg.itemClass);
+                if (item) {
+                    e.preventDefault();
+                    selectItem(item);
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!menu.contains(e.target) && !input.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+                    closeDropdown();
+                }
+            });
+
+            if (modalEl) {
+                modalEl.addEventListener('hidden.bs.modal', function() {
+                    closeDropdown();
+                });
+            }
+
+            return {
+                open: openDropdown,
+                close: closeDropdown,
+                filter: filterOptions
+            };
+        }
+
+        // 1. Vendor Name Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newVendorNameInput',
+            toggleBtnId: 'newVendorDropdownToggleBtn',
+            iconId: 'newVendorDropdownIcon',
+            menuId: 'newVendorDropdownMenu',
+            optionsListId: 'newVendorOptionsList',
+            noMatchId: 'newVendorNoMatch',
+            matchCountId: 'newVendorMatchCount',
+            itemClass: 'new-vendor-option-item',
+            searchFields: ['value']
+        });
+
+        // 2. PO # Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newPoNumberInput',
+            toggleBtnId: 'newPoDropdownToggleBtn',
+            iconId: 'newPoDropdownIcon',
+            menuId: 'newPoDropdownMenu',
+            optionsListId: 'newPoOptionsList',
+            noMatchId: 'newPoNoMatch',
+            matchCountId: 'newPoMatchCount',
+            itemClass: 'new-po-option-item',
+            searchFields: ['value', 'vendor', 'job'],
+            onSelect: function(item, val) {
+                var vendor = item.dataset.vendor;
+                var job = item.dataset.job;
+                var loadtype = item.dataset.loadtype;
+
+                var vInput = document.getElementById('newVendorNameInput');
+                if (vInput && !vInput.value.trim() && vendor) {
+                    vInput.value = vendor;
+                    vInput.dispatchEvent(new Event('input'));
+                }
+
+                var jInput = document.getElementById('newJobNumberInput');
+                if (jInput && !jInput.value.trim() && job) {
+                    jInput.value = job;
+                    jInput.dispatchEvent(new Event('input'));
+                }
+
+                var ltSelect = document.getElementById('newLoadTypeSelect');
+                if (ltSelect && loadtype) {
+                    for (var i = 0; i < ltSelect.options.length; i++) {
+                        if (ltSelect.options[i].value.toLowerCase() === loadtype.toLowerCase()) {
+                            ltSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // 3. Job # Auto-Suggest
+        setupAutoSuggest({
+            inputId: 'newJobNumberInput',
+            toggleBtnId: 'newJobDropdownToggleBtn',
+            iconId: 'newJobDropdownIcon',
+            menuId: 'newJobDropdownMenu',
+            optionsListId: 'newJobOptionsList',
+            noMatchId: 'newJobNoMatch',
+            matchCountId: 'newJobMatchCount',
+            itemClass: 'new-job-option-item',
+            searchFields: ['value', 'client']
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         initTableSorting();
+        initCreateShipmentAutoSuggest();
     });
 </script>
 }

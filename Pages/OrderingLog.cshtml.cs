@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MaterialsAlstar.Data;
@@ -63,6 +63,25 @@ public class OrderingLogModel : PageModel
     public List<string> LoadTypeOptions { get; set; } = new();
     public List<string> JobOptions { get; set; } = new();
 
+    // Auto-suggest lookup options for Create New Shipment modal
+    public List<string> ExistingVendors { get; set; } = new();
+    public List<PoLookupOption> ExistingPOs { get; set; } = new();
+    public List<JobLookupOption> ExistingJobs { get; set; } = new();
+
+    public class PoLookupOption
+    {
+        public string PoNumber { get; set; } = string.Empty;
+        public string? VendorName { get; set; }
+        public string? JobNumber { get; set; }
+        public string? LoadType { get; set; }
+    }
+
+    public class JobLookupOption
+    {
+        public string JobNumber { get; set; } = string.Empty;
+        public string? ClientName { get; set; }
+    }
+
     public async Task OnGetAsync()
     {
         // 1. Determine reference date (defaults to Oct 5, 2026 or Today)
@@ -121,6 +140,92 @@ public class OrderingLogModel : PageModel
             .Where(j => !string.IsNullOrEmpty(j))
             .Distinct()
             .OrderBy(j => j)
+            .ToList();
+
+
+        // Populate Auto-suggest Options for Create New Shipment Modal
+        var expectedVendors = await _context.ExpectedOrders
+            .Select(o => o.VendorName)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct()
+            .ToListAsync();
+
+        var receivingVendors = await _context.ReceivingLogs
+            .Select(r => r.VendorName)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct()
+            .ToListAsync();
+
+        ExistingVendors = expectedVendors
+            .Concat(receivingVendors)
+            .Select(v => v.Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v)
+            .ToList();
+
+        var expectedPOs = await _context.ExpectedOrders
+            .Where(o => !string.IsNullOrWhiteSpace(o.PoNumber))
+            .Select(o => new PoLookupOption
+            {
+                PoNumber = o.PoNumber.Trim(),
+                VendorName = o.VendorName,
+                JobNumber = o.JobNumber,
+                LoadType = o.LoadType
+            })
+            .ToListAsync();
+
+        var receivingPOs = await _context.ReceivingLogs
+            .Where(r => !string.IsNullOrWhiteSpace(r.PoNumber))
+            .Select(r => new PoLookupOption
+            {
+                PoNumber = r.PoNumber.Trim(),
+                VendorName = r.VendorName,
+                JobNumber = r.JobNumber,
+                LoadType = r.LoadType
+            })
+            .ToListAsync();
+
+        ExistingPOs = expectedPOs
+            .Concat(receivingPOs)
+            .GroupBy(p => p.PoNumber, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new PoLookupOption
+            {
+                PoNumber = g.Key,
+                VendorName = g.Select(x => x.VendorName).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)),
+                JobNumber = g.Select(x => x.JobNumber).FirstOrDefault(j => !string.IsNullOrWhiteSpace(j)),
+                LoadType = g.Select(x => x.LoadType).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))
+            })
+            .OrderBy(p => p.PoNumber)
+            .ToList();
+
+        var expectedJobs = await _context.ExpectedOrders
+            .Where(o => !string.IsNullOrWhiteSpace(o.JobNumber))
+            .Select(o => new JobLookupOption
+            {
+                JobNumber = o.JobNumber.Trim(),
+                ClientName = o.ClientName
+            })
+            .ToListAsync();
+
+        var receivingJobs = await _context.ReceivingLogs
+            .Where(r => !string.IsNullOrWhiteSpace(r.JobNumber))
+            .Select(r => new JobLookupOption
+            {
+                JobNumber = r.JobNumber!.Trim(),
+                ClientName = r.ClientName
+            })
+            .ToListAsync();
+
+        ExistingJobs = expectedJobs
+            .Concat(receivingJobs)
+            .GroupBy(j => j.JobNumber, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new JobLookupOption
+            {
+                JobNumber = g.Key,
+                ClientName = g.Select(x => x.ClientName).FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))
+            })
+            .OrderBy(j => j.JobNumber)
             .ToList();
 
         // 3. Search Logic
