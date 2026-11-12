@@ -1,0 +1,1177 @@
+@page
+@model MaterialsAlstar.Pages.ShippingModel
+@{
+    ViewData["Title"] = "Shipping - Bills of Lading";
+}
+
+<!-- Notification Banners -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill fs-4 me-2 text-success"></i>
+            <div>
+                <strong>Success!</strong> @TempData["SuccessMessage"]
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
+            <div>
+                <strong>Notice:</strong> @TempData["WarningMessage"]
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<!-- Page Sub-Header / Breadcrumb -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a asp-page="/Index">Materials &amp; QC</a>
+        <i class="bi bi-chevron-right mx-1 small"></i>
+        <span>Shipping &amp; Receiving</span>
+        <i class="bi bi-chevron-right mx-1 small"></i>
+        <span class="text-dark fw-semibold">Shipping (Bills of Lading)</span>
+    </div>
+
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <h1 class="hs-page-title mb-0">
+                <i class="bi bi-truck text-primary me-2"></i>Shipping &mdash; Bills of Lading
+                <span class="hs-count-badge" id="bolCountBadge">@Model.BillsOfLading.Count BOLs</span>
+            </h1>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 small font-monospace">
+                Next BOL: <strong>@Model.NextBolNumber</strong>
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button class="hs-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createBolModal" onclick="prepareNewBolModal()">
+                <i class="bi bi-plus-circle me-1"></i> Add New BOL
+            </button>
+            <button class="hs-btn-secondary" type="button" onclick="exportBolsToCsv()">
+                <i class="bi bi-download me-1"></i> Export CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="px-3 pt-3">
+    <div class="row g-3">
+        <!-- Total Bills of Lading -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <a asp-page="/Shipping" asp-route-TypeFilter="all" class="text-decoration-none d-block h-100">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-primary">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-muted small fw-semibold text-uppercase">Total Bills of Lading</span>
+                        <i class="bi bi-file-earmark-text-fill text-primary fs-5"></i>
+                    </div>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <span class="fs-2 fw-bold text-dark">@Model.TotalBolsCount</span>
+                        <span class="text-muted small">BOL records</span>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Next sequence: <span class="font-monospace fw-semibold text-primary">@Model.NextBolNumber</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Shiploose BOLs -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <a asp-page="/Shipping" asp-route-TypeFilter="Shiploose" class="text-decoration-none d-block h-100">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-info">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-muted small fw-semibold text-uppercase">Shiploose BOLs</span>
+                        <i class="bi bi-box-seam-fill text-info fs-5"></i>
+                    </div>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <span class="fs-2 fw-bold text-info">@Model.ShiplooseCount</span>
+                        <span class="text-muted small">shipments</span>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Loose kitted materials &amp; hardware
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Assembly BOLs -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <a asp-page="/Shipping" asp-route-TypeFilter="Assembly" class="text-decoration-none d-block h-100">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-success">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-muted small fw-semibold text-uppercase">Assembly BOLs</span>
+                        <i class="bi bi-diagram-3-fill text-success fs-5"></i>
+                    </div>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <span class="fs-2 fw-bold text-success">@Model.AssemblyCount</span>
+                        <span class="text-muted small">shipments</span>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Fabricated spools &amp; module assemblies
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Total Pallets & Crates -->
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-secondary">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-semibold text-uppercase">Total Pallets &amp; Crates</span>
+                    <i class="bi bi-layers-fill text-secondary fs-5"></i>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-2 fw-bold text-dark">@Model.TotalPalletsCount</span>
+                    <span class="text-muted small">pallets, <strong>@Model.TotalCratesCount</strong> crates</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Combined kitted shipping units
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar: Filter and Search -->
+<div class="hs-toolbar mt-3">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100" id="bolFilterForm">
+        <!-- Left: Search Box -->
+        <div class="d-flex align-items-center gap-2 flex-grow-1" style="max-width: 440px;">
+            <div class="position-relative flex-grow-1">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                <input type="text"
+                       name="SearchTerm"
+                       id="bolSearchInput"
+                       class="form-control form-control-sm ps-5 pe-4 rounded-pill"
+                       placeholder="Search BOL #, Job #, Batch ID, Priorities, Kitter, Notes..."
+                       value="@Model.SearchTerm" />
+                @if (!string.IsNullOrEmpty(Model.SearchTerm))
+                {
+                    <button type="button" class="btn btn-sm btn-link text-muted position-absolute top-50 end-0 translate-middle-y me-2 p-0" onclick="clearBolSearch()" title="Clear search">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Search</button>
+        </div>
+
+        <!-- Right: Dropdown Filters -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Linked Job # Filter -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small fw-semibold">Job #:</span>
+                <select name="JobFilter" class="form-select form-select-sm" style="width: 145px;" onchange="this.form.submit()">
+                    <option value="all" selected="@(Model.JobFilter == "all")">All Jobs</option>
+                    @foreach (var job in Model.JobOptions)
+                    {
+                        <option value="@job" selected="@(string.Equals(Model.JobFilter, job, StringComparison.OrdinalIgnoreCase))">Job @job</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Type Filter -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small fw-semibold">Type:</span>
+                <select name="TypeFilter" class="form-select form-select-sm" style="width: 145px;" onchange="this.form.submit()">
+                    <option value="all" selected="@(Model.TypeFilter == "all")">All Types</option>
+                    <option value="Shiploose" selected="@(string.Equals(Model.TypeFilter, "Shiploose", StringComparison.OrdinalIgnoreCase))">Shiploose</option>
+                    <option value="Assembly" selected="@(string.Equals(Model.TypeFilter, "Assembly", StringComparison.OrdinalIgnoreCase))">Assembly</option>
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || Model.TypeFilter != "all" || Model.JobFilter != "all")
+            {
+                <a asp-page="/Shipping" class="btn btn-sm btn-link text-decoration-none text-muted ps-1">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </a>
+            }
+        </div>
+    </form>
+</div>
+
+<!-- Main Bills of Lading Table -->
+<div class="hs-table-container mt-3 shadow-sm rounded border bg-white">
+    @if (Model.BillsOfLading.Count == 0)
+    {
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-truck text-secondary display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Bills of Lading found</h5>
+            <p class="mb-3">
+                @if (!string.IsNullOrEmpty(Model.SearchTerm) || Model.TypeFilter != "all" || Model.JobFilter != "all")
+                {
+                    <span>No BOL records match your current search or filter criteria.</span>
+                }
+                else
+                {
+                    <span>Click <strong>Add New BOL</strong> to create the first Bill of Lading.</span>
+                }
+            </p>
+            <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createBolModal" onclick="prepareNewBolModal()">
+                <i class="bi bi-plus-circle me-1"></i> Add New BOL
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table hs-table table-hover align-middle mb-0" id="bolTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width: 140px;">BOL Number</th>
+                        <th style="min-width: 115px;">Job #</th>
+                        <th style="min-width: 160px;">Ship From</th>
+                        <th style="min-width: 140px;">Ship To</th>
+                        <th style="min-width: 90px; text-align: center;">Batch ID</th>
+                        <th style="min-width: 150px;">Priorities</th>
+                        <th style="min-width: 115px; text-align: center;">Type</th>
+                        <th style="min-width: 120px;">Kitter</th>
+                        <th style="min-width: 95px; text-align: center;">Pallets</th>
+                        <th style="min-width: 95px; text-align: center;">Crates</th>
+                        <th style="min-width: 130px;">Date Created</th>
+                        <th style="min-width: 180px;">Notes</th>
+                        <th style="min-width: 115px; text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var bol in Model.BillsOfLading)
+                    {
+                        var priorityTokens = (bol.Priorities ?? "")
+                            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .Where(p => !string.IsNullOrEmpty(p))
+                            .ToList();
+
+                        <tr>
+                            <!-- 1. BOL Number -->
+                            <td>
+                                <span class="badge bg-dark font-monospace fw-bold fs-6 px-2 py-1">@bol.BolNumber</span>
+                            </td>
+
+                            <!-- 2. Job # (Linked to other jobs in the application) -->
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-primary font-monospace fw-bold py-0 px-2 dropdown-toggle"
+                                            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                            title="View Job @bol.JobNumber across MaterialsAlstar">
+                                        <i class="bi bi-link-45deg"></i>@bol.JobNumber
+                                    </button>
+                                    <ul class="dropdown-menu shadow-sm small">
+                                        <li class="dropdown-header fw-bold text-dark">Job @bol.JobNumber Links</li>
+                                        <li>
+                                            <a class="dropdown-item" asp-page="/Index" asp-route-job="@bol.JobNumber">
+                                                <i class="bi bi-box-seam me-2 text-primary"></i>View in Materials &amp; QC
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" asp-page="/ReceivingLog" asp-route-SearchTerm="@bol.JobNumber">
+                                                <i class="bi bi-geo-alt me-2 text-success"></i>View in Receiving Log
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" asp-page="/OrderingLog" asp-route-SearchTerm="@bol.JobNumber">
+                                                <i class="bi bi-clock-history me-2 text-info"></i>View in Ordering Log
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li>
+                                            <a class="dropdown-item" asp-page="/Shipping" asp-route-JobFilter="@bol.JobNumber">
+                                                <i class="bi bi-funnel me-2 text-muted"></i>Filter BOLs by Job @bol.JobNumber
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+
+                            <!-- 3. Ship From -->
+                            <td>
+                                <div class="small text-dark" style="white-space: pre-line; line-height: 1.25;">@bol.ShipFrom</div>
+                            </td>
+
+                            <!-- 4. Ship To -->
+                            <td>
+                                <div class="small fw-semibold text-dark" style="white-space: pre-line; line-height: 1.25;">@bol.ShipTo</div>
+                            </td>
+
+                            <!-- 5. Batch ID -->
+                            <td style="text-align: center;">
+                                <span class="badge bg-light text-dark border font-monospace px-2 py-1">#@bol.BatchId</span>
+                            </td>
+
+                            <!-- 6. Priorities (List of integers and ranges of integers) -->
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var token in priorityTokens)
+                                    {
+                                        bool isRange = token.Contains('-');
+                                        <span class="badge @(isRange ? "bg-primary-subtle text-primary border border-primary-subtle" : "bg-secondary-subtle text-dark border") font-monospace"
+                                              title="@(isRange ? $"Priority Range {token}" : $"Priority {token}")">
+                                            P:@token
+                                        </span>
+                                    }
+                                </div>
+                            </td>
+
+                            <!-- 7. Type (Shiploose or Assembly) -->
+                            <td style="text-align: center;">
+                                @if (string.Equals(bol.Type, "Assembly", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fw-semibold">
+                                        <i class="bi bi-diagram-3 me-1"></i>Assembly
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info-subtle text-dark border border-info-subtle px-2 py-1 fw-semibold">
+                                        <i class="bi bi-box-seam me-1"></i>Shiploose
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- 8. Kitter -->
+                            <td>
+                                <div class="small fw-semibold text-dark">
+                                    <i class="bi bi-person-check text-muted me-1"></i>@bol.Kitter
+                                </div>
+                            </td>
+
+                            <!-- 9. Pallet Count -->
+                            <td style="text-align: center;">
+                                <span class="fw-bold font-monospace @(bol.PalletCount > 0 ? "text-dark" : "text-muted")">@bol.PalletCount</span>
+                            </td>
+
+                            <!-- 10. Crate Count -->
+                            <td style="text-align: center;">
+                                <span class="fw-bold font-monospace @(bol.CrateCount > 0 ? "text-dark" : "text-muted")">@bol.CrateCount</span>
+                            </td>
+
+                            <!-- 11. Date Created -->
+                            <td>
+                                <div class="small text-dark fw-medium">@bol.DateCreated.ToString("MMM d, yyyy")</div>
+                                <div class="text-muted" style="font-size: 11px;">@bol.DateCreated.ToString("h:mm tt")</div>
+                            </td>
+
+                            <!-- 12. Notes -->
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(bol.Notes))
+                                {
+                                    <div class="small text-dark text-break" style="max-width: 240px;">@bol.Notes</div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic small">--</span>
+                                }
+                            </td>
+
+                            <!-- 13. Actions: Edit & Print PDF Buttons -->
+                            <td style="text-align: center;">
+                                <div class="d-flex align-items-center justify-content-center gap-1">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary fw-semibold text-nowrap"
+                                            data-bol-id="@bol.Id"
+                                            data-bol-number="@bol.BolNumber"
+                                            data-job-number="@bol.JobNumber"
+                                            data-ship-from="@bol.ShipFrom"
+                                            data-ship-to="@bol.ShipTo"
+                                            data-batch-id="@bol.BatchId"
+                                            data-priorities="@bol.Priorities"
+                                            data-type="@bol.Type"
+                                            data-kitter="@bol.Kitter"
+                                            data-pallet-count="@bol.PalletCount"
+                                            data-crate-count="@bol.CrateCount"
+                                            data-date-created="@bol.DateCreated.ToString("MMM d, yyyy h:mm tt")"
+                                            data-notes="@(bol.Notes ?? "")"
+                                            onclick="openEditBolModal(this)"
+                                            title="Edit Bill of Lading @bol.BolNumber">
+                                        <i class="bi bi-pencil-square me-1"></i>Edit
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-dark fw-semibold text-nowrap"
+                                            data-bol-number="@bol.BolNumber"
+                                            data-job-number="@bol.JobNumber"
+                                            data-ship-from="@bol.ShipFrom"
+                                            data-ship-to="@bol.ShipTo"
+                                            data-batch-id="@bol.BatchId"
+                                            data-priorities="@bol.Priorities"
+                                            data-type="@bol.Type"
+                                            data-kitter="@bol.Kitter"
+                                            data-pallet-count="@bol.PalletCount"
+                                            data-crate-count="@bol.CrateCount"
+                                            data-date-created="@bol.DateCreated.ToString("yyyy-MM-dd HH:mm")"
+                                            data-notes="@(bol.Notes ?? "")"
+                                            onclick="printBolPdf(this)"
+                                            title="Print Bill of Lading @bol.BolNumber as PDF">
+                                        <i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>Print PDF
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: Add New Bill of Lading (BOL)                                       -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="createBolModal" tabindex="-1" aria-labelledby="createBolModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow border-0">
+            <form method="post" asp-page-handler="CreateBol" id="createBolForm">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold" id="createBolModalLabel">
+                        <i class="bi bi-truck me-2 text-coral"></i>Add New Bill of Lading (BOL)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Auto-Generated Header Banner (BOL # and Date Created) -->
+                    <div class="p-3 bg-light rounded border mb-3">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">
+                                    BOL Number <span class="badge bg-secondary-subtle text-secondary border ms-1">Auto-Generated</span>
+                                </label>
+                                <input type="text"
+                                       class="form-control form-control-sm font-monospace fw-bold bg-white"
+                                       value="@Model.NextBolNumber"
+                                       readonly />
+                                <div class="form-text" style="font-size: 11px;">
+                                    Format <code>AO[YY].BOL[###]</code> sequenced automatically from previous BOL.
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">
+                                    Date Created <span class="badge bg-secondary-subtle text-secondary border ms-1">Auto-Generated</span>
+                                </label>
+                                <input type="text"
+                                       id="newBolDateCreatedDisplay"
+                                       class="form-control form-control-sm font-monospace bg-white"
+                                       value="@DateTime.Now.ToString("yyyy-MM-dd hh:mm tt")"
+                                       readonly />
+                                <div class="form-text" style="font-size: 11px;">
+                                    Stamped automatically with current date and time upon creation.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Ship From & Ship To -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Ship From: <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="shipFrom"
+                                      id="newBolShipFrom"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      placeholder="Origin facility name and address..."
+                                      required>Alstar Group - Calgary Fab Shop
+8700 Venture Ave
+Calgary, AB T3S 0A2</textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Ship To: <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="shipTo"
+                                      id="newBolShipTo"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      placeholder="Destination client / site address..."
+                                      required>Cenovus</textarea>
+                        </div>
+
+                        <!-- Job # (Linked to existing jobs) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Job # <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-light"><i class="bi bi-link-45deg"></i></span>
+                                <input type="text"
+                                       name="jobNumber"
+                                       id="newBolJobNumber"
+                                       list="linkedJobOptionsList"
+                                       class="form-control form-control-sm font-monospace"
+                                       value="@(Model.JobOptions.FirstOrDefault() ?? "251078")"
+                                       placeholder="Select or enter Job #"
+                                       required />
+                            </div>
+                            <datalist id="linkedJobOptionsList">
+                                @foreach (var job in Model.JobOptions)
+                                {
+                                    <option value="@job">Linked Application Job @job</option>
+                                }
+                            </datalist>
+                            <div class="form-text" style="font-size: 11px;">Linked to active jobs in Materials &amp; Receiving.</div>
+                        </div>
+
+                        <!-- Batch ID (Integer) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Batch ID <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="1"
+                                   name="batchId"
+                                   id="newBolBatchId"
+                                   class="form-control form-control-sm font-monospace"
+                                   value="105"
+                                   required />
+                            <div class="form-text" style="font-size: 11px;">Integer batch identifier.</div>
+                        </div>
+
+                        <!-- Type (Shiploose or Assembly) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Type <span class="text-danger">*</span>
+                            </label>
+                            <select name="type" id="newBolType" class="form-select form-select-sm" required>
+                                <option value="Shiploose" selected>Shiploose</option>
+                                <option value="Assembly">Assembly</option>
+                            </select>
+                            <div class="form-text" style="font-size: 11px;">Choose Shiploose or Assembly.</div>
+                        </div>
+
+                        <!-- Priorities (List of integers and ranges of integers) -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Priorities (Integers &amp; Ranges) <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   name="priorities"
+                                   id="newBolPriorities"
+                                   class="form-control form-control-sm font-monospace"
+                                   placeholder="e.g. 1, 3, 5-8, 12"
+                                   oninput="updatePriorityPreview()"
+                                   required />
+                            <div class="d-flex align-items-center justify-content-between mt-1 flex-wrap gap-1">
+                                <span class="form-text m-0" style="font-size: 11px;">
+                                    Enter comma-separated integers and/or integer ranges (e.g., <code>1, 4, 6-10, 15</code>).
+                                </span>
+                                <div id="priorityPreviewBadges" class="d-flex flex-wrap gap-1"></div>
+                            </div>
+                        </div>
+
+                        <!-- Kitter -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Kitter <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   name="kitter"
+                                   id="newBolKitter"
+                                   list="kitterOptionsList"
+                                   class="form-control form-control-sm"
+                                   placeholder="Person doing the kitting"
+                                   required />
+                            <datalist id="kitterOptionsList">
+                                @foreach (var k in Model.KitterOptions)
+                                {
+                                    <option value="@k"></option>
+                                }
+                            </datalist>
+                        </div>
+
+                        <!-- Pallet Count -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Pallet Count <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="0"
+                                   name="palletCount"
+                                   id="newBolPalletCount"
+                                   class="form-control form-control-sm font-monospace"
+                                   value="0"
+                                   required />
+                        </div>
+
+                        <!-- Crate Count -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Crate Count <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="0"
+                                   name="crateCount"
+                                   id="newBolCrateCount"
+                                   class="form-control form-control-sm font-monospace"
+                                   value="0"
+                                   required />
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Notes
+                            </label>
+                            <textarea name="notes"
+                                      id="newBolNotes"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      placeholder="Enter kitting notes, staging location, carrier details, or special handling instructions..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">
+                        <i class="bi bi-check2-circle me-1"></i> Create BOL (@Model.NextBolNumber)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: Edit Existing Bill of Lading (BOL)                                 -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="editBolModal" tabindex="-1" aria-labelledby="editBolModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow border-0">
+            <form method="post" asp-page-handler="EditBol" id="editBolForm">
+                <input type="hidden" name="id" id="editBolId" value="" />
+                <input type="hidden" name="bolNumber" id="editBolNumberHidden" value="" />
+
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="editBolModalLabel">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Bill of Lading &mdash; <span id="editBolHeaderNumber" class="font-monospace"></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Read-Only Header Banner (BOL # and Date Created) -->
+                    <div class="p-3 bg-light rounded border mb-3">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">
+                                    BOL Number <span class="badge bg-secondary-subtle text-secondary border ms-1">Locked</span>
+                                </label>
+                                <input type="text"
+                                       id="editBolNumberDisplay"
+                                       class="form-control form-control-sm font-monospace fw-bold bg-white"
+                                       readonly />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">
+                                    Date Created <span class="badge bg-secondary-subtle text-secondary border ms-1">Locked</span>
+                                </label>
+                                <input type="text"
+                                       id="editBolDateCreatedDisplay"
+                                       class="form-control form-control-sm font-monospace bg-white"
+                                       readonly />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Ship From & Ship To -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Ship From: <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="shipFrom"
+                                      id="editBolShipFrom"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      required></textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Ship To: <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="shipTo"
+                                      id="editBolShipTo"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      required></textarea>
+                        </div>
+
+                        <!-- Job # (Linked to existing jobs) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Job # <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-light"><i class="bi bi-link-45deg"></i></span>
+                                <input type="text"
+                                       name="jobNumber"
+                                       id="editBolJobNumber"
+                                       list="linkedJobOptionsList"
+                                       class="form-control form-control-sm font-monospace"
+                                       required />
+                            </div>
+                        </div>
+
+                        <!-- Batch ID (Integer) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Batch ID <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="0"
+                                   name="batchId"
+                                   id="editBolBatchId"
+                                   class="form-control form-control-sm font-monospace"
+                                   required />
+                        </div>
+
+                        <!-- Type (Shiploose or Assembly) -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Type <span class="text-danger">*</span>
+                            </label>
+                            <select name="type" id="editBolType" class="form-select form-select-sm" required>
+                                <option value="Shiploose">Shiploose</option>
+                                <option value="Assembly">Assembly</option>
+                            </select>
+                        </div>
+
+                        <!-- Priorities (List of integers and ranges of integers) -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Priorities (Integers &amp; Ranges) <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   name="priorities"
+                                   id="editBolPriorities"
+                                   class="form-control form-control-sm font-monospace"
+                                   placeholder="e.g. 1, 3, 5-8, 12"
+                                   oninput="updateEditPriorityPreview()"
+                                   required />
+                            <div class="d-flex align-items-center justify-content-between mt-1 flex-wrap gap-1">
+                                <span class="form-text m-0" style="font-size: 11px;">
+                                    Enter comma-separated integers and/or integer ranges (e.g., <code>1, 4, 6-10, 15</code>).
+                                </span>
+                                <div id="editPriorityPreviewBadges" class="d-flex flex-wrap gap-1"></div>
+                            </div>
+                        </div>
+
+                        <!-- Kitter -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Kitter <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   name="kitter"
+                                   id="editBolKitter"
+                                   list="kitterOptionsList"
+                                   class="form-control form-control-sm"
+                                   required />
+                        </div>
+
+                        <!-- Pallet Count -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Pallet Count <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="0"
+                                   name="palletCount"
+                                   id="editBolPalletCount"
+                                   class="form-control form-control-sm font-monospace"
+                                   required />
+                        </div>
+
+                        <!-- Crate Count -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Crate Count <span class="text-danger">*</span>
+                            </label>
+                            <input type="number"
+                                   step="1"
+                                   min="0"
+                                   name="crateCount"
+                                   id="editBolCrateCount"
+                                   class="form-control form-control-sm font-monospace"
+                                   required />
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Notes
+                            </label>
+                            <textarea name="notes"
+                                      id="editBolNotes"
+                                      class="form-control form-control-sm"
+                                      rows="3"
+                                      placeholder="Enter kitting notes, staging location, carrier details, or special handling instructions..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">
+                        <i class="bi bi-check2-circle me-1"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function clearBolSearch() {
+            var input = document.getElementById('bolSearchInput');
+            if (input) {
+                input.value = '';
+                document.getElementById('bolFilterForm').submit();
+            }
+        }
+
+        function prepareNewBolModal() {
+            var dateInput = document.getElementById('newBolDateCreatedDisplay');
+            if (dateInput) {
+                var now = new Date();
+                dateInput.value = now.toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+            updatePriorityPreview();
+        }
+
+        function openEditBolModal(btn) {
+            if (!btn) return;
+            var bolId = btn.getAttribute('data-bol-id') || '';
+            var bolNumber = btn.getAttribute('data-bol-number') || '';
+            var jobNumber = btn.getAttribute('data-job-number') || '';
+            var shipFrom = btn.getAttribute('data-ship-from') || '';
+            var shipTo = btn.getAttribute('data-ship-to') || '';
+            var batchId = btn.getAttribute('data-batch-id') || '0';
+            var priorities = btn.getAttribute('data-priorities') || '';
+            var type = btn.getAttribute('data-type') || 'Shiploose';
+            var kitter = btn.getAttribute('data-kitter') || '';
+            var palletCount = btn.getAttribute('data-pallet-count') || '0';
+            var crateCount = btn.getAttribute('data-crate-count') || '0';
+            var dateCreated = btn.getAttribute('data-date-created') || '';
+            var notes = btn.getAttribute('data-notes') || '';
+
+            document.getElementById('editBolId').value = bolId;
+            document.getElementById('editBolNumberHidden').value = bolNumber;
+            document.getElementById('editBolHeaderNumber').innerText = bolNumber;
+            document.getElementById('editBolNumberDisplay').value = bolNumber;
+            document.getElementById('editBolDateCreatedDisplay').value = dateCreated;
+
+            document.getElementById('editBolShipFrom').value = shipFrom;
+            document.getElementById('editBolShipTo').value = shipTo;
+            document.getElementById('editBolJobNumber').value = jobNumber;
+            document.getElementById('editBolBatchId').value = batchId;
+            document.getElementById('editBolType').value = (type.toLowerCase() === 'assembly') ? 'Assembly' : 'Shiploose';
+            document.getElementById('editBolPriorities').value = priorities;
+            document.getElementById('editBolKitter').value = kitter;
+            document.getElementById('editBolPalletCount').value = palletCount;
+            document.getElementById('editBolCrateCount').value = crateCount;
+            document.getElementById('editBolNotes').value = notes;
+
+            updateEditPriorityPreview();
+
+            var modal = new bootstrap.Modal(document.getElementById('editBolModal'));
+            modal.show();
+        }
+
+        function updateEditPriorityPreview() {
+            var input = document.getElementById('editBolPriorities');
+            var container = document.getElementById('editPriorityPreviewBadges');
+            if (!input || !container) return;
+
+            var tokens = input.value.split(/[,;]+/).map(function(t) { return t.trim(); }).filter(Boolean);
+            container.innerHTML = tokens.map(function(t) {
+                var isValid = /^\d+$/.test(t) || /^\d+\s*-\s*\d+$/.test(t);
+                var cls = isValid
+                    ? 'bg-primary-subtle text-primary border border-primary-subtle'
+                    : 'bg-danger-subtle text-danger border border-danger-subtle';
+                return '<span class="badge ' + cls + ' font-monospace">P:' + t.replace(/\s+/g, '') + '</span>';
+            }).join('');
+        }
+
+        function updatePriorityPreview() {
+            var input = document.getElementById('newBolPriorities');
+            var container = document.getElementById('priorityPreviewBadges');
+            if (!input || !container) return;
+
+            var tokens = input.value.split(/[,;]+/).map(function(t) { return t.trim(); }).filter(Boolean);
+            container.innerHTML = tokens.map(function(t) {
+                var isValid = /^\d+$/.test(t) || /^\d+\s*-\s*\d+$/.test(t);
+                var cls = isValid
+                    ? 'bg-primary-subtle text-primary border border-primary-subtle'
+                    : 'bg-danger-subtle text-danger border border-danger-subtle';
+                return '<span class="badge ' + cls + ' font-monospace">P:' + t.replace(/\s+/g, '') + '</span>';
+            }).join('');
+        }
+
+        function exportBolsToCsv() {
+            var table = document.getElementById('bolTable');
+            if (!table) return;
+            var rows = Array.from(table.querySelectorAll('tr'));
+            var csv = rows.map(function(row) {
+                var cells = Array.from(row.querySelectorAll('th, td'));
+                return cells.map(function(c) {
+                    var text = (c.innerText || '').replace(/\r?\n|\r/g, ' ').trim().replace(/"/g, '""');
+                    return '"' + text + '"';
+                }).join(',');
+            }).join('\n');
+
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'BillsOfLading_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function escapePrintHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatPrintTimestamp(d) {
+            var yyyy = d.getFullYear();
+            var mm = String(d.getMonth() + 1).padStart(2, '0');
+            var dd = String(d.getDate()).padStart(2, '0');
+            var hh = String(d.getHours()).padStart(2, '0');
+            var min = String(d.getMinutes()).padStart(2, '0');
+            return yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + min;
+        }
+
+        function printBolPdf(btn) {
+            if (!btn) return;
+            var bolNumber = btn.getAttribute('data-bol-number') || '';
+            var jobNumber = btn.getAttribute('data-job-number') || '';
+            var shipFrom = btn.getAttribute('data-ship-from') || 'Alstar Group - Calgary Fab Shop\n8700 Venture Ave\nCalgary, AB T3S 0A2';
+            var shipTo = btn.getAttribute('data-ship-to') || 'Cenovus';
+            var batchId = btn.getAttribute('data-batch-id') || '';
+            var priorities = (btn.getAttribute('data-priorities') || '').replace(/\s+/g, '');
+            var type = btn.getAttribute('data-type') || 'Shiploose';
+            var kitter = btn.getAttribute('data-kitter') || '';
+            var palletCount = parseInt(btn.getAttribute('data-pallet-count') || '0', 10) || 0;
+            var crateCount = parseInt(btn.getAttribute('data-crate-count') || '0', 10) || 0;
+            var dateCreated = btn.getAttribute('data-date-created') || formatPrintTimestamp(new Date());
+            var notes = btn.getAttribute('data-notes') || '';
+
+            var datePrinted = formatPrintTimestamp(new Date());
+            var clientName = (shipTo.split(/\r?\n/)[0] || shipTo).trim();
+            var clientProject = (priorities ? (priorities + ' - ') : '') + type;
+            var totalPages = 1 + crateCount + palletCount;
+            var palletCrateSummary = palletCount + ' Pallet(s) / ' + crateCount + ' Crate(s)';
+
+            // Build Crate & Pallet pages matching Pages 2+ of the reference PDF (without inventory table)
+            var unitPagesHtml = '';
+
+            for (var c = 1; c <= crateCount; c++) {
+                var crateLabel = crateCount > 1 ? ('CRATE (' + c + ' of ' + crateCount + ')') : 'CRATE';
+                unitPagesHtml +=
+                    '<div class="pdf-page page-break">' +
+                        '<div class="unit-top-banner">' +
+                            '<div class="unit-job-title">JOB: ' + escapePrintHtml(jobNumber) + ' &nbsp;|&nbsp; ' + escapePrintHtml(type.toUpperCase()) + '</div>' +
+                            '<div class="unit-priority-box">' +
+                                '<div class="unit-priority-label">PRIORITY:</div>' +
+                                '<div class="unit-priority-val">' + escapePrintHtml(priorities || '-') + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="unit-sub-banner">' +
+                            '<div>' +
+                                '<div class="unit-sub-label">PALLET / CRATE:</div>' +
+                                '<div class="unit-sub-val">' + escapePrintHtml(crateLabel) + '</div>' +
+                            '</div>' +
+                            '<div class="unit-by-val">BY: ' + escapePrintHtml(kitter) + '</div>' +
+                        '</div>' +
+                        '<div class="unit-desc-row">DESC: ' + escapePrintHtml(notes || '-') + '</div>' +
+                    '</div>';
+            }
+
+            for (var p = 1; p <= palletCount; p++) {
+                var palletLabel = palletCount > 1 ? ('PALLET (' + p + ' of ' + palletCount + ')') : 'PALLET';
+                unitPagesHtml +=
+                    '<div class="pdf-page page-break">' +
+                        '<div class="unit-top-banner">' +
+                            '<div class="unit-job-title">JOB: ' + escapePrintHtml(jobNumber) + ' &nbsp;|&nbsp; ' + escapePrintHtml(type.toUpperCase()) + '</div>' +
+                            '<div class="unit-priority-box">' +
+                                '<div class="unit-priority-label">PRIORITY:</div>' +
+                                '<div class="unit-priority-val">' + escapePrintHtml(priorities || '-') + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="unit-sub-banner">' +
+                            '<div>' +
+                                '<div class="unit-sub-label">PALLET / CRATE:</div>' +
+                                '<div class="unit-sub-val">' + escapePrintHtml(palletLabel) + '</div>' +
+                            '</div>' +
+                            '<div class="unit-by-val">BY: ' + escapePrintHtml(kitter) + '</div>' +
+                        '</div>' +
+                        '<div class="unit-desc-row">DESC: ' + escapePrintHtml(notes || '-') + '</div>' +
+                    '</div>';
+            }
+
+            var html = '<!DOCTYPE html><html><head><meta charset="utf-8" />' +
+                '<title>Bill of Lading - ' + escapePrintHtml(bolNumber) + '</title>' +
+                '<style>' +
+                    '@@page { size: letter portrait; margin: 0.45in; }' +
+                    '* { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+                    'body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; padding: 0; font-size: 12px; }' +
+                    '.pdf-page { width: 100%; }' +
+                    '.page-break { page-break-before: always; break-before: page; }' +
+                    '.bol-header-banner { background: #000; color: #fff; text-align: center; font-size: 22px; font-weight: 700; padding: 12px 16px; margin-bottom: 14px; }' +
+                    'table.bol-grid { width: 100%; border-collapse: collapse; margin-bottom: 12px; }' +
+                    'table.bol-grid th, table.bol-grid td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; text-align: left; }' +
+                    '.ship-header { font-size: 14px; font-weight: 700; background: #fff; }' +
+                    '.ship-body { font-size: 13px; white-space: pre-line; min-height: 64px; line-height: 1.35; }' +
+                    '.legal-box { border: 1px solid #999; background: #f2f2f2; padding: 8px 10px; margin-bottom: 12px; }' +
+                    '.legal-title { font-weight: 700; font-size: 10.5px; margin-bottom: 4px; }' +
+                    '.legal-text { font-size: 8.5px; line-height: 1.28; color: #111; }' +
+                    '.copy-table th { background: #efefef; font-size: 11px; font-weight: 700; }' +
+                    '.copy-table td { font-size: 11.5px; }' +
+                    '.reg-table td { font-size: 12px; padding: 7px 8px; }' +
+                    '.meta-table td { font-size: 12px; padding: 5px 8px; }' +
+                    '.meta-label { font-weight: 700; width: 18%; background: #fff; }' +
+                    '.meta-val { width: 32%; }' +
+                    '.notice-line { font-weight: 700; font-size: 10.5px; margin: 12px 0 8px 0; }' +
+                    '.unit-top-banner { background: #000; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; margin-bottom: 8px; }' +
+                    '.unit-job-title { font-size: 18px; font-weight: 700; }' +
+                    '.unit-priority-box { text-align: right; }' +
+                    '.unit-priority-label { font-size: 10px; text-transform: uppercase; opacity: 0.9; }' +
+                    '.unit-priority-val { font-size: 15px; font-weight: 700; }' +
+                    '.unit-sub-banner { background: #efefef; display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 14px; margin-bottom: 10px; }' +
+                    '.unit-sub-label { font-size: 10px; color: #333; text-transform: uppercase; }' +
+                    '.unit-sub-val { font-size: 16px; font-weight: 700; margin-top: 2px; }' +
+                    '.unit-by-val { font-size: 14px; font-weight: 700; }' +
+                    '.unit-desc-row { font-size: 11px; font-weight: 700; margin-bottom: 6px; }' +
+                '</style>' +
+                '</head><body>' +
+                '<!-- PAGE 1: Main Bill of Lading -->' +
+                '<div class="pdf-page">' +
+                    '<div class="bol-header-banner">Bill of Lading - ' + escapePrintHtml(bolNumber) + '</div>' +
+                    '<table class="bol-grid">' +
+                        '<tr>' +
+                            '<th class="ship-header" style="width: 50%;">Ship From:</th>' +
+                            '<th class="ship-header" style="width: 50%;">Ship To:</th>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td class="ship-body">' + escapePrintHtml(shipFrom) + '</td>' +
+                            '<td class="ship-body">' + escapePrintHtml(shipTo) + '</td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<div class="legal-box">' +
+                        '<div class="legal-title">OVERWEIGHT AND OVERDIMENSIONAL PERMIT #:</div>' +
+                        '<div class="legal-text">' +
+                            'Non-negotiable-The contract for the Carriage of Goods Listed in this Bill of Lading is regulation Passed by the Alberta Motor Transport Board under the Motor Transport Act. Deemed to contain and be subject to conditions set out in the regulation. Received, subject to the classification and tariffs in effect on the date of the receipt by the carrier of the property described in the original bill of lading. Received at the point shown on the date specified and from the shipper mentioned herein, the property herein described in apparent good order (unless otherwise clearly marked below), which said carrier agrees to carry and deliver to the said consignee at the said destination if on its own route, otherwise to deliver to another carrier on the route to the said destination. It is mutually agreed as to each carrier of all or any said property over all or any portion of said route to destination, and as to each party at any time interested in all or any of said property, that every service be performed hereunder shall be subject to all the conditions not prohibited by law, whether printed or written, which are hereby agreed to by the shipper and accepted for himself/herself and his/her assigns.' +
+                        '</div>' +
+                    '</div>' +
+                    '<table class="bol-grid copy-table">' +
+                        '<tr>' +
+                            '<th style="width: 18%;">COPY</th>' +
+                            '<th style="width: 26%;">Print Name</th>' +
+                            '<th style="width: 32%;">Sign Name</th>' +
+                            '<th style="width: 24%;">Date &amp; Time</th>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td>[ ] Shipper</td>' +
+                            '<td>Shipper</td>' +
+                            '<td>' + escapePrintHtml(kitter || 'Aaron Victoria') + '</td>' +
+                            '<td>' + escapePrintHtml(dateCreated) + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td>[ ] Reciever</td>' +
+                            '<td>Reciever</td>' +
+                            '<td></td>' +
+                            '<td></td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td>[ ] Driver</td>' +
+                            '<td>Driver</td>' +
+                            '<td></td>' +
+                            '<td></td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<table class="bol-grid reg-table">' +
+                        '<tr>' +
+                            '<td style="width: 22%;">W.C.B# 1128791</td>' +
+                            '<td style="width: 23%;">GST# 100169432</td>' +
+                            '<td style="width: 25%;">M.V.I.D# 0102-75709</td>' +
+                            '<td style="width: 30%;">EMERGENCY # 24HRS<br/>780-865-5938</td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<table class="bol-grid meta-table">' +
+                        '<tr>' +
+                            '<td class="meta-label">Job#</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(jobNumber) + '</td>' +
+                            '<td class="meta-label">Date Printed:</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(datePrinted) + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td class="meta-label">Client:</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(clientName) + '</td>' +
+                            '<td class="meta-label">Loaded By:</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(kitter) + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td class="meta-label">Client Project:</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(clientProject) + '</td>' +
+                            '<td class="meta-label">Total Number of Pages:</td>' +
+                            '<td class="meta-val">' + totalPages + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td class="meta-label">Carrier:</td>' +
+                            '<td class="meta-val"></td>' +
+                            '<td class="meta-label">Pallet/Crate Count:</td>' +
+                            '<td class="meta-val">' + escapePrintHtml(palletCrateSummary) + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td class="meta-label">Incoterms</td>' +
+                            '<td class="meta-val"></td>' +
+                            '<td class="meta-label">P/O #:</td>' +
+                            '<td class="meta-val">' + (batchId ? ('Batch #' + escapePrintHtml(batchId)) : '') + '</td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<div class="notice-line">Receiving discrepancies must be noted within 72 hours of delivery. Failure to do so will indicate that the shipment arrived in acceptable order.</div>' +
+                '</div>' +
+                unitPagesHtml +
+                '</body></html>';
+
+            var printWin = window.open('', '_blank', 'width=900,height=1000');
+            if (!printWin) {
+                alert('Please allow pop-ups to print the Bill of Lading PDF.');
+                return;
+            }
+            printWin.document.open();
+            printWin.document.write(html);
+            printWin.document.close();
+            printWin.focus();
+            setTimeout(function() {
+                printWin.print();
+            }, 250);
+        }
+    </script>
+}

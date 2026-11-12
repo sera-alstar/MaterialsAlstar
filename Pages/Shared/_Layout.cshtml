@@ -31,6 +31,9 @@
                     <a asp-page="/ErrorLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/ErrorLog" ? "active" : "")">
                         <i class="bi bi-exclamation-triangle me-1"></i> Error Log
                     </a>
+                    <a asp-page="/Shipping" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/Shipping" ? "active" : "")">
+                        <i class="bi bi-truck me-1"></i> Shipping (BOL)
+                    </a>
                 </nav>
             </div>
 

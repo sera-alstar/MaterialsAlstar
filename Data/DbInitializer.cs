@@ -133,5 +133,72 @@ public static class DbInitializer
 
             context.SaveChanges();
         }
+
+        if (!context.BillsOfLading.Any())
+        {
+            var persistedBols = BillOfLading.LoadPersistedBols();
+            if (persistedBols != null && persistedBols.Count > 0)
+            {
+                foreach (var b in persistedBols) b.Id = 0;
+                context.BillsOfLading.AddRange(persistedBols);
+                context.SaveChanges();
+            }
+            else
+            {
+                string yy = (DateTime.Now.Year % 100).ToString("00");
+                var seedBols = new List<BillOfLading>
+                {
+                    new BillOfLading
+                    {
+                        BolNumber = $"AO{yy}.BOL001",
+                        JobNumber = "261073C",
+                        ShipFrom = "Alstar Group - Calgary Fab Shop\n8700 Venture Ave\nCalgary, AB T3S 0A2",
+                        ShipTo = "Cenovus",
+                        BatchId = 101,
+                        Priorities = "11, 12, 13, 14",
+                        Type = "Shiploose",
+                        Kitter = "Kris",
+                        PalletCount = 1,
+                        CrateCount = 1,
+                        DateCreated = DateTime.Now.AddDays(-5),
+                        Notes = "Initial shiploose valves, gaskets, and directional anchors kitted for Area 100."
+                    },
+                    new BillOfLading
+                    {
+                        BolNumber = $"AO{yy}.BOL002",
+                        JobNumber = "251078C",
+                        ShipFrom = "Alstar Group - Calgary Fab Shop\n8700 Venture Ave\nCalgary, AB T3S 0A2",
+                        ShipTo = "Cenovus",
+                        BatchId = 102,
+                        Priorities = "3, 7-10",
+                        Type = "Assembly",
+                        Kitter = "Kris",
+                        PalletCount = 2,
+                        CrateCount = 2,
+                        DateCreated = DateTime.Now.AddDays(-3),
+                        Notes = "Prefabricated pipe spool assemblies and pipe shoes secured on flatbed skids."
+                    },
+                    new BillOfLading
+                    {
+                        BolNumber = $"AO{yy}.BOL003",
+                        JobNumber = "251078",
+                        ShipFrom = "Alstar Group - Calgary Fab Shop\n8700 Venture Ave\nCalgary, AB T3S 0A2",
+                        ShipTo = "Cenovus",
+                        BatchId = 104,
+                        Priorities = "11-14, 18",
+                        Type = "Shiploose",
+                        Kitter = "Aaron Victoria",
+                        PalletCount = 4,
+                        CrateCount = 0,
+                        DateCreated = DateTime.Now.AddDays(-1),
+                        Notes = "Flange kits and spiral wound gaskets shrink-wrapped and tagged by priority."
+                    }
+                };
+
+                context.BillsOfLading.AddRange(seedBols);
+                context.SaveChanges();
+                BillOfLading.SavePersistedBols(context.BillsOfLading.ToList());
+            }
+        }
     }
 }
