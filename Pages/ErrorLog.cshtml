@@ -1,0 +1,1300 @@
+@page
+@model MaterialsAlstar.Pages.ErrorLogModel
+@{
+    ViewData["Title"] = "Inspection Error Log & Discrepancies";
+}
+
+<!-- Notification Banners -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill fs-4 me-2 text-success"></i>
+            <div>
+                <strong>Success!</strong> @TempData["SuccessMessage"]
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show m-3 mb-0 d-flex align-items-center justify-content-between shadow-sm" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
+            <div>
+                <strong>Notice:</strong> @TempData["WarningMessage"]
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<!-- Page Sub-Header / Breadcrumb -->
+<div class="hs-page-header">
+    <div class="hs-breadcrumb">
+        <a asp-page="/Index">Materials &amp; QC</a> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <a asp-page="/ReceivingLog">Receiving Log (Yard)</a> 
+        <i class="bi bi-chevron-right mx-1 small"></i> 
+        <span class="text-dark fw-semibold">Error Log &amp; Discrepancies</span>
+    </div>
+
+    <div class="hs-title-row">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="hs-page-title mb-0">
+                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Receiving Inspection Error Log
+                <span class="hs-count-badge" id="recordCountBadge">@Model.Errors.Count issues</span>
+            </h1>
+            @if (Model.OpenErrorsCount > 0)
+            {
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 small fw-bold">
+                    <i class="bi bi-bell-fill me-1"></i> @Model.OpenErrorsCount unresolved @(Model.OpenErrorsCount == 1 ? "error" : "errors") require action
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-bold">
+                    <i class="bi bi-check-all me-1"></i> All inspection errors resolved
+                </span>
+            }
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-danger btn-sm fw-semibold" type="button" data-bs-toggle="modal" data-bs-target="#createManualErrorModal">
+                <i class="bi bi-plus-circle me-1"></i> Log Inspection Discrepancy
+            </button>
+            <a asp-page="/ReceivingLog" class="btn btn-outline-secondary btn-sm fw-semibold">
+                <i class="bi bi-geo-alt me-1"></i> Back to Receiving Log
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Minimizable KPI Cards & Status Pie Chart Section -->
+<div class="px-3 pt-3">
+    <div class="card border-0 shadow-sm rounded-3 bg-white overflow-hidden">
+        <!-- Collapsible Header Bar -->
+        <div class="card-header bg-white border-bottom py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-2"
+             style="cursor: pointer;" onclick="toggleErrorKpiSection()">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <i class="bi bi-bar-chart-fill text-primary"></i>
+                <span class="fw-bold text-dark small text-uppercase">KPI Summary &amp; Status Breakdown</span>
+                <!-- Compact Summary Pills (Always visible, especially useful when minimized) -->
+                <div class="d-flex align-items-center gap-1 flex-wrap ms-1" id="kpiCompactPills">
+                    <span class="badge bg-light text-dark border font-monospace">Total: @Model.TotalErrorsCount</span>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle font-monospace">Open: @Model.OpenStatusCount</span>
+                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle font-monospace">In Review: @Model.InReviewCount</span>
+                    <span class="badge bg-warning-subtle text-dark border font-monospace">Pending QC: @Model.PendingQcCount</span>
+                    <span class="badge bg-info-subtle text-dark border border-info-subtle font-monospace">Pending SCM: @Model.AwaitingScmCount</span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace">Resolved: @Model.ResolvedErrorsCount</span>
+                </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-light border py-0 px-2 text-muted small fw-semibold d-flex align-items-center gap-1"
+                    id="toggleKpiSectionBtn" onclick="event.stopPropagation(); toggleErrorKpiSection();" title="Minimize or expand KPI cards">
+                <span id="toggleKpiSectionText">Minimize KPIs</span>
+                <i class="bi bi-chevron-up" id="toggleKpiSectionIcon"></i>
+            </button>
+        </div>
+
+        <!-- Collapsible Body -->
+        <div id="errorKpiSectionBody" class="p-3 bg-light bg-opacity-50">
+            <div class="row g-3 align-items-stretch">
+                <!-- KPI Cards Grid (Left / Main Area) -->
+                <div class="col-12 col-xl-7">
+                    <div class="row g-3 h-100">
+                        <!-- 1. Total Errors Logged -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-primary kpi-interactive-card @(Model.StatusFilter == "all" && Model.QcFilter == "all" && Model.ScmFilter == "all" ? "ring-active-card" : "")" id="kpiCard_total">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-StatusFilter="all" class="text-muted small fw-semibold text-uppercase text-decoration-none stretched-link-title">Total Errors Logged</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-light text-dark border font-monospace kpi-min-badge d-none">@Model.TotalErrorsCount</span>
+                                        <i class="bi bi-exclamation-diamond-fill text-primary fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_total')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-StatusFilter="all" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-dark">@Model.TotalErrorsCount</span>
+                                        <span class="text-muted small">total</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        All OS&amp;D and inspection discrepancies
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 2. Open / Unresolved Errors -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-danger kpi-interactive-card @(Model.StatusFilter == "open" ? "ring-active-card" : "")" id="kpiCard_open">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-StatusFilter="open" class="text-muted small fw-semibold text-uppercase text-decoration-none">Open / Unresolved</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-danger-subtle text-danger border font-monospace kpi-min-badge d-none">@Model.OpenErrorsCount</span>
+                                        <i class="bi bi-exclamation-circle-fill text-danger fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_open')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-StatusFilter="open" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-danger">@Model.OpenErrorsCount</span>
+                                        <span class="text-muted small">unresolved</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Awaiting resolution or disposition
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 3. In Review -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-warning kpi-interactive-card @(Model.StatusFilter == "in_review" ? "ring-active-card" : "")" id="kpiCard_review">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-StatusFilter="in_review" class="text-muted small fw-semibold text-uppercase text-decoration-none">In Review</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-warning-subtle text-dark border font-monospace kpi-min-badge d-none">@Model.InReviewCount</span>
+                                        <i class="bi bi-hourglass-split text-warning fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_review')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-StatusFilter="in_review" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-warning">@Model.InReviewCount</span>
+                                        <span class="text-muted small">under review</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Held pending engineering / QA review
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 4. Pending QC Verification -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-warning kpi-interactive-card @(Model.QcFilter == "pending" ? "ring-active-card" : "")" id="kpiCard_qc">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-QcFilter="pending" class="text-muted small fw-semibold text-uppercase text-decoration-none">Pending QC Check</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-warning-subtle text-dark border font-monospace kpi-min-badge d-none">@Model.PendingQcCount</span>
+                                        <i class="bi bi-clipboard2-pulse-fill text-warning fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_qc')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-QcFilter="pending" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-dark">@Model.PendingQcCount</span>
+                                        <span class="text-muted small">awaiting QC</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Awaiting QA/QC inspection sign-off
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 5. Awaiting SCM Submission -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-info kpi-interactive-card @(Model.ScmFilter == "pending" ? "ring-active-card" : "")" id="kpiCard_scm">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-ScmFilter="pending" class="text-muted small fw-semibold text-uppercase text-decoration-none">Awaiting SCM Submission</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-info-subtle text-dark border font-monospace kpi-min-badge d-none">@Model.AwaitingScmCount</span>
+                                        <i class="bi bi-cloud-arrow-up-fill text-info fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_scm')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-ScmFilter="pending" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-info">@Model.AwaitingScmCount</span>
+                                        <span class="text-muted small">pending SCM</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Not yet submitted to Vista SCM
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 6. Resolved Errors -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-4 border-success kpi-interactive-card @(Model.StatusFilter == "resolved" ? "ring-active-card" : "")" id="kpiCard_resolved">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <a asp-page="/ErrorLog" asp-route-StatusFilter="resolved" class="text-muted small fw-semibold text-uppercase text-decoration-none">Resolved</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-success-subtle text-success border font-monospace kpi-min-badge d-none">@Model.ResolvedErrorsCount</span>
+                                        <i class="bi bi-check-circle-fill text-success fs-6"></i>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1 kpi-card-min-btn" onclick="toggleSingleKpiCard(event, 'kpiCard_resolved')" title="Minimize card">
+                                            <i class="bi bi-dash-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <a asp-page="/ErrorLog" asp-route-StatusFilter="resolved" class="text-decoration-none kpi-card-details">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="fs-2 fw-bold text-success">@Model.ResolvedErrorsCount</span>
+                                        <span class="text-muted small">completed</span>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Completed dispositions &amp; resolutions
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Pie Chart Card with Toggleable Statuses (Right Area) -->
+                <div class="col-12 col-xl-5">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 d-flex flex-column justify-content-between">
+                        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1">
+                            <div>
+                                <span class="text-muted small fw-semibold text-uppercase d-block">Errors by Current Status</span>
+                                <span class="text-muted" style="font-size: 11px;">Toggle statuses below to include/exclude in chart</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn btn-sm btn-light border py-0 px-2 text-muted" style="font-size: 11px;" onclick="setAllPieStatuses(true)" title="Enable all statuses">All</button>
+                                <button type="button" class="btn btn-sm btn-light border py-0 px-2 text-muted" style="font-size: 11px;" onclick="resetCorePieStatuses()" title="Reset to core statuses (Open, In Review, Resolved)">Core</button>
+                                <span class="badge bg-light text-dark border font-monospace" id="pieChartActiveTotalBadge">@Model.TotalErrorsCount Shown</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-around gap-3 my-auto py-1 flex-wrap flex-sm-nowrap">
+                            <!-- Canvas Pie Chart -->
+                            <div class="position-relative d-flex align-items-center justify-content-center" style="width: 155px; height: 155px; flex-shrink: 0;">
+                                <canvas id="errorStatusPieChart" width="155" height="155" style="cursor: pointer;"></canvas>
+                                <div id="pieChartTooltip" class="position-fixed bg-dark text-white small px-2 py-1 rounded shadow-sm pe-none" style="display: none; font-size: 11px; z-index: 2000;"></div>
+                            </div>
+
+                            <!-- Interactive Status Toggle List -->
+                            <div class="flex-grow-1 d-flex flex-column gap-1 w-100" style="min-width: 210px;" id="pieStatusToggleList">
+                                <!-- Populated and synchronized by initStatusPieChart() -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar: Filter and Search -->
+<div class="hs-toolbar mt-3">
+    <form method="get" class="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100" id="filterForm">
+        <!-- Left: Search Box -->
+        <div class="d-flex align-items-center gap-2 flex-grow-1" style="max-width: 440px;">
+            <div class="position-relative flex-grow-1">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                <input type="text"
+                       name="SearchTerm"
+                       id="errorSearchInput"
+                       class="form-control form-control-sm ps-5 pe-4 rounded-pill"
+                       placeholder="Search JP Key, Vendor, Packing Slip, PO#, Inspector, BOM..."
+                       value="@Model.SearchTerm" />
+                @if (!string.IsNullOrEmpty(Model.SearchTerm))
+                {
+                    <button type="button" class="btn btn-sm btn-link text-muted position-absolute top-50 end-0 translate-middle-y me-2 p-0" onclick="clearSearch()" title="Clear search">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Search</button>
+        </div>
+
+        <!-- Right: Dropdown Filters -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Status Filter -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small fw-semibold">Status:</span>
+                <select name="StatusFilter" class="form-select form-select-sm" style="width: 140px;" onchange="this.form.submit()">
+                    <option value="all" selected="@(Model.StatusFilter == "all")">All Statuses</option>
+                    <option value="open" selected="@(Model.StatusFilter == "open")">Open Only</option>
+                    <option value="in_review" selected="@(Model.StatusFilter == "in_review")">In Review</option>
+                    <option value="resolved" selected="@(Model.StatusFilter == "resolved")">Resolved</option>
+                </select>
+            </div>
+
+            <!-- QC Check Filter -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small fw-semibold">QC Check:</span>
+                <select name="QcFilter" class="form-select form-select-sm" style="width: 140px;" onchange="this.form.submit()">
+                    <option value="all" selected="@(Model.QcFilter == "all")">All QC States</option>
+                    <option value="checked" selected="@(Model.QcFilter == "checked")">QC Checked</option>
+                    <option value="pending" selected="@(Model.QcFilter == "pending")">QC Pending</option>
+                </select>
+            </div>
+
+            <!-- SCM Submission Filter -->
+            <div class="d-flex align-items-center gap-1">
+                <span class="text-muted small fw-semibold">SCM:</span>
+                <select name="ScmFilter" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
+                    <option value="all" selected="@(Model.ScmFilter == "all")">All SCM States</option>
+                    <option value="submitted" selected="@(Model.ScmFilter == "submitted")">Submitted to SCM</option>
+                    <option value="pending" selected="@(Model.ScmFilter == "pending")">Awaiting SCM</option>
+                </select>
+            </div>
+
+            <!-- Error Type Filter -->
+            @if (Model.ErrorTypeOptions.Count > 0)
+            {
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small fw-semibold">Discrepancy:</span>
+                    <select name="ErrorTypeFilter" class="form-select form-select-sm" style="width: 160px;" onchange="this.form.submit()">
+                        <option value="all" selected="@(Model.ErrorTypeFilter == "all")">All Types</option>
+                        @foreach (var opt in Model.ErrorTypeOptions)
+                        {
+                            <option value="@opt" selected="@(Model.ErrorTypeFilter == opt)">@opt</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <!-- Clear All Filters Link -->
+            @if (!string.IsNullOrEmpty(Model.SearchTerm) || Model.StatusFilter != "all" || Model.QcFilter != "all" || Model.ScmFilter != "all" || Model.ErrorTypeFilter != "all")
+            {
+                <a asp-page="/ErrorLog" class="btn btn-sm btn-link text-decoration-none text-muted ps-1">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </a>
+            }
+        </div>
+    </form>
+</div>
+
+<!-- Main Table Container -->
+<div class="hs-table-container mt-3 shadow-sm rounded border bg-white">
+    @if (Model.Errors.Count == 0)
+    {
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-shield-check text-success display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No inspection errors found</h5>
+            <p class="mb-3">
+                @if (!string.IsNullOrEmpty(Model.SearchTerm) || Model.StatusFilter != "all" || Model.QcFilter != "all" || Model.ScmFilter != "all")
+                {
+                    <span>No errors match your current search or filter criteria.</span>
+                }
+                else
+                {
+                    <span>All landed shipments have passed receiving inspections with no discrepancies logged!</span>
+                }
+            </p>
+            <a asp-page="/ErrorLog" class="btn btn-sm btn-outline-secondary me-2">Clear Filters</a>
+            <a asp-page="/ReceivingLog" class="btn btn-sm btn-primary">Go to Receiving Log</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table hs-table table-hover align-middle mb-0" id="errorLogTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width: 130px;">JP Key</th>
+                        <th style="min-width: 150px;">Vendor &amp; PO</th>
+                        <th style="min-width: 120px;">Packing Slip #</th>
+                        <th style="min-width: 110px;">Inspector</th>
+                        <th style="min-width: 120px;">Arrival Date</th>
+                        <th style="min-width: 120px;">Date Inspected</th>
+                        <th style="min-width: 110px; text-align: center;">QC Checked?</th>
+                        <th style="min-width: 160px; text-align: center;">Submitted to SCM?</th>
+                        <th style="min-width: 220px;">Error Details</th>
+                        <th style="min-width: 100px; text-align: center;">Status</th>
+                        <th style="min-width: 120px; text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var err in Model.Errors)
+                    {
+                        var rowClass = err.IsResolved ? "table-light opacity-85" : "";
+                        <tr class="@rowClass">
+                            <!-- 1. JP Key -->
+                            <td>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge bg-dark font-monospace fw-bold fs-6">@err.JpKey</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(err.JobNumber))
+                                {
+                                    <div class="text-muted small" style="font-size: 11px;">
+                                        Job: <span class="fw-semibold">@err.JobNumber</span>
+                                    </div>
+                                }
+                            </td>
+
+                            <!-- 2. Vendor & PO -->
+                            <td>
+                                <div class="fw-bold text-dark">@err.VendorName</div>
+                                <div class="small font-monospace text-muted">
+                                    PO: <span class="fw-semibold text-primary">@err.PoNumber</span>
+                                </div>
+                            </td>
+
+                            <!-- 3. Packing List / Slip # -->
+                            <td>
+                                <span class="badge bg-light text-dark border font-monospace px-2 py-1">
+                                    @err.PackingSlipNumber
+                                </span>
+                            </td>
+
+                            <!-- 4. Inspector -->
+                            <td>
+                                <div class="small fw-semibold text-dark">
+                                    <i class="bi bi-person-badge text-muted me-1"></i>@(err.InspectorName ?? "Unassigned")
+                                </div>
+                            </td>
+
+                            <!-- 5. Arrival Date -->
+                            <td>
+                                <div class="small text-dark fw-medium">
+                                    @err.ArrivalDate.ToString("MMM d, yyyy")
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">
+                                    @err.ArrivalDate.ToString("h:mm tt")
+                                </div>
+                            </td>
+
+                            <!-- 6. Date Inspected -->
+                            <td>
+                                @if (err.DateInspected.HasValue)
+                                {
+                                    <div class="small text-dark fw-medium">
+                                        @err.DateInspected.Value.ToString("MMM d, yyyy")
+                                    </div>
+                                    <div class="text-muted" style="font-size: 11px;">
+                                        @err.DateInspected.Value.ToString("h:mm tt")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary-subtle text-muted border small">
+                                        In Progress
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- 7. If QC has checked the shipment -->
+                            <td style="text-align: center;">
+                                @if (err.IsQcChecked)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-semibold" 
+                                          title="@(string.IsNullOrEmpty(err.QcNotes) ? "QC Check Completed" : err.QcNotes)">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Yes (Checked)
+                                    </span>
+                                    @if (err.QcCheckedAt.HasValue)
+                                    {
+                                        <div class="text-muted" style="font-size: 10px;">
+                                            @err.QcCheckedAt.Value.ToString("MMM d, h:mm tt")
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1 small fw-semibold"
+                                          title="@(string.IsNullOrEmpty(err.QcNotes) ? "Pending QC Verification" : err.QcNotes)">
+                                        <i class="bi bi-clock me-1 text-warning"></i> No (Pending QC)
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- 8. If/when the shipment has been submitted to SCM -->
+                            <td style="text-align: center;">
+                                @if (err.IsSubmittedToScm)
+                                {
+                                    <span class="badge bg-info-subtle text-dark border border-info-subtle px-2 py-1 small fw-semibold"
+                                          title="@(string.IsNullOrEmpty(err.ScmNotes) ? "Submitted to Vista SCM" : err.ScmNotes)">
+                                        <i class="bi bi-cloud-check-fill text-info me-1"></i> Yes (Submitted)
+                                    </span>
+                                    @if (err.ScmSubmittedAt.HasValue)
+                                    {
+                                        <div class="text-muted font-monospace" style="font-size: 10.5px;">
+                                            @err.ScmSubmittedAt.Value.ToString("MMM d, yyyy h:mm tt")
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(err.ScmNotes))
+                                    {
+                                        <div class="text-muted fst-italic" style="font-size: 10px; max-width: 180px; margin: 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@err.ScmNotes">
+                                            @err.ScmNotes
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary-subtle text-secondary border px-2 py-1 small fw-semibold">
+                                        <i class="bi bi-dash-circle me-1"></i> Not Submitted
+                                    </span>
+                                    <div class="text-muted" style="font-size: 10px;">Awaiting Entry in SCM</div>
+                                }
+                            </td>
+
+                            <!-- 9. Error Details / Description -->
+                            <td>
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <span class="badge @(err.ErrorType.Contains("Shortage") ? "bg-danger-subtle text-danger border border-danger-subtle" : err.ErrorType.Contains("Damage") ? "bg-danger text-white" : err.ErrorType.Contains("Overage") ? "bg-warning-subtle text-dark border border-warning" : "bg-primary-subtle text-primary border border-primary-subtle") small fw-semibold">
+                                        @err.ErrorType
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(err.AffectedLineNumber))
+                                    {
+                                        <span class="badge bg-light text-muted border font-monospace" style="font-size: 10px;">Line @err.AffectedLineNumber</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(err.BomId))
+                                    {
+                                        <span class="badge bg-light text-muted border font-monospace" style="font-size: 10px;">BOM @err.BomId</span>
+                                    }
+                                </div>
+                                <div class="small text-dark fw-medium text-break" style="max-width: 320px;">
+                                    @err.ErrorDescription
+                                </div>
+                                @if (err.QuantityDue.HasValue && err.QuantityReceived.HasValue && (err.QuantityDue != err.QuantityReceived))
+                                {
+                                    <div class="text-muted font-monospace mt-1" style="font-size: 11px;">
+                                        Due: <span class="fw-bold">@err.QuantityDue</span> | Rec'd: <span class="fw-bold text-danger">@err.QuantityReceived</span>
+                                    </div>
+                                }
+                                @if (err.IsResolved && !string.IsNullOrEmpty(err.ResolutionAction))
+                                {
+                                    <div class="mt-1 pt-1 border-top" style="font-size: 11px;">
+                                        <span class="text-success fw-bold"><i class="bi bi-check2-circle me-1"></i>Action:</span> @err.ResolutionAction
+                                        @if (!string.IsNullOrEmpty(err.ResolutionNotes))
+                                        {
+                                            <div class="text-muted fst-italic">"@err.ResolutionNotes"</div>
+                                        }
+                                        <div class="text-muted" style="font-size: 10px;">By @err.ResolvedBy on @err.ResolvedAt?.ToString("MMM d, h:mm tt")</div>
+                                    </div>
+                                }
+                            </td>
+
+                            <!-- 10. Status -->
+                            <td style="text-align: center;">
+                                @if (err.IsResolved)
+                                {
+                                    <span class="badge bg-success text-white px-2 py-1 small fw-bold">
+                                        <i class="bi bi-check2-all me-1"></i> Resolved
+                                    </span>
+                                }
+                                else if (err.Status == "In Review")
+                                {
+                                    <span class="badge bg-warning text-dark px-2 py-1 small fw-bold">
+                                        <i class="bi bi-hourglass-split me-1"></i> In Review
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger text-white px-2 py-1 small fw-bold">
+                                        <i class="bi bi-exclamation-circle me-1"></i> Open
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- 11. Actions -->
+                            <td style="text-align: center;">
+                                <div class="d-flex flex-column gap-1 align-items-center">
+                                    @if (!err.IsResolved)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-success fw-bold text-white shadow-sm w-100"
+                                                style="font-size: 12px;"
+                                                onclick="openResolveModal(@err.Id, '@Html.Raw(err.JpKey)', '@Html.Raw(err.VendorName)', '@Html.Raw(err.PoNumber)', '@Html.Raw(err.PackingSlipNumber)', '@Html.Raw(err.ErrorType)', '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(err.ErrorDescription))', @(err.IsQcChecked ? "true" : "false"), @(err.IsSubmittedToScm ? "true" : "false"), '@(err.ScmSubmittedAt?.ToString("yyyy-MM-ddTHH:mm") ?? "")', '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(err.ScmNotes ?? ""))')">
+                                            <i class="bi bi-check2-circle me-1"></i> Resolve
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <form method="post" asp-page-handler="ReopenError" onsubmit="return confirm('Are you sure you want to reopen this inspection error?');">
+                                            <input type="hidden" name="errorId" value="@err.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-warning w-100" style="font-size: 11px;" title="Reopen this discrepancy">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i> Reopen
+                                            </button>
+                                        </form>
+                                    }
+
+                                    <!-- Quick Link to Receiving Log -->
+                                    <a asp-page="/ReceivingLog" asp-route-SearchTerm="@err.JpKey" class="btn btn-sm btn-link text-decoration-none text-muted p-0" style="font-size: 11px;" title="View shipment in Receiving Log">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i> View in Yard
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- ========================================================================= -->
+<!-- RESOLUTION MODAL: Resolve Error Directly in Error Log Screen               -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="resolveErrorModal" tabindex="-1" aria-labelledby="resolveErrorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow border-0">
+            <form method="post" asp-page-handler="ResolveError">
+                <input type="hidden" name="errorId" id="resolveErrorId" value="" />
+
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold" id="resolveErrorModalLabel">
+                        <i class="bi bi-check2-circle me-2"></i>Resolve Receiving Inspection Error
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Shipment & Discrepancy Summary Card -->
+                    <div class="p-3 bg-light rounded border mb-3">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-sm-3">
+                                <span class="text-muted small d-block">JP Key:</span>
+                                <span class="badge bg-dark font-monospace fs-6" id="resolveModalJpKey">--</span>
+                            </div>
+                            <div class="col-sm-3">
+                                <span class="text-muted small d-block">Vendor:</span>
+                                <span class="fw-semibold text-dark" id="resolveModalVendor">--</span>
+                            </div>
+                            <div class="col-sm-3">
+                                <span class="text-muted small d-block">PO Number:</span>
+                                <span class="fw-bold font-monospace text-primary" id="resolveModalPo">--</span>
+                            </div>
+                            <div class="col-sm-3">
+                                <span class="text-muted small d-block">Packing Slip #:</span>
+                                <span class="badge bg-white text-dark border font-monospace" id="resolveModalPackingSlip">--</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 pt-2 border-top">
+                            <span class="text-muted small fw-semibold">Flagged Error:</span>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1" id="resolveModalErrorType">Discrepancy</span>
+                            <div class="small text-dark mt-1" id="resolveModalErrorDesc">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Resolution Action Form Fields -->
+                    <div class="row g-3">
+                        <!-- Resolution Action Dropdown -->
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Resolution Action / Disposition <span class="text-danger">*</span>
+                            </label>
+                            <select name="resolutionAction" id="resolveModalActionSelect" class="form-select form-select-sm" required>
+                                <option value="">-- Select Resolution Action --</option>
+                                <option value="Vendor Credit Requested">Vendor Credit Requested (RMA / Shortage Memo)</option>
+                                <option value="Replacement Shipment Scheduled">Replacement Shipment Scheduled by Vendor</option>
+                                <option value="PO Amended &amp; Extra Accepted">PO Amended &amp; Variance Accepted in SCM</option>
+                                <option value="Engineering Deviation Waiver Approved">Engineering Deviation / Spec Waiver Approved</option>
+                                <option value="Physical Count Reconciled &amp; Corrected">Physical Count Reconciled (Miscount Verified)</option>
+                                <option value="Quarantined &amp; Return to Vendor Initiated">Material Quarantined &amp; RTV (Return to Vendor) Initiated</option>
+                                <option value="Accepted As-Is (Minor Discrepancy)">Accepted As-Is (Minor Surface Cosmetic / Allowed Variance)</option>
+                                <option value="Other">Other Resolution (Specify in notes below)</option>
+                            </select>
+                        </div>
+
+                        <!-- Resolved By -->
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Resolved By <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="resolvedBy" class="form-control form-control-sm" value="Aaron Victoria" required />
+                        </div>
+
+                        <!-- Resolution Notes -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">
+                                Resolution Notes &amp; RMA / SCM Details <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="resolutionNotes" class="form-control form-control-sm" rows="3" placeholder="Provide detailed explanation of how this error was resolved, communication with vendor/buyer, RMA#, or PO adjustment..." required></textarea>
+                        </div>
+
+                        <div class="col-12"><hr class="my-2" /></div>
+
+                        <!-- QC Verification Status -->
+                        <div class="col-md-6">
+                            <div class="card h-100 border bg-light p-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" name="markQcChecked" id="resolveModalMarkQcChecked" value="true" checked />
+                                    <label class="form-check-label fw-bold text-dark small" for="resolveModalMarkQcChecked">
+                                        <i class="bi bi-shield-check text-success me-1"></i>QC Check Completed
+                                    </label>
+                                </div>
+                                <p class="text-muted small mb-2" style="font-size: 11px;">
+                                    Confirm that Quality Control / QA has inspected and signed off on this shipment.
+                                </p>
+                                <input type="text" name="qcNotes" id="resolveModalQcNotes" class="form-control form-control-sm" placeholder="QC Comments / Sign-off notes..." />
+                            </div>
+                        </div>
+
+                        <!-- SCM Submission Status -->
+                        <div class="col-md-6">
+                            <div class="card h-100 border bg-light p-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" name="markScmSubmitted" id="resolveModalMarkScmSubmitted" value="true" checked onchange="toggleScmFields(this.checked)" />
+                                    <label class="form-check-label fw-bold text-dark small" for="resolveModalMarkScmSubmitted">
+                                        <i class="bi bi-cloud-check text-info me-1"></i>Submitted to SCM
+                                    </label>
+                                </div>
+                                <p class="text-muted small mb-2" style="font-size: 11px;">
+                                    Log if and when this shipment / resolution has been submitted to Vista SCM.
+                                </p>
+                                <div id="scmInputFields">
+                                    <div class="mb-2">
+                                        <label class="text-muted small" style="font-size: 10.5px;">Date &amp; Time Submitted:</label>
+                                        <input type="datetime-local" name="scmSubmittedAt" id="resolveModalScmSubmittedAt" class="form-control form-control-sm font-monospace" />
+                                    </div>
+                                    <input type="text" name="scmNotes" id="resolveModalScmNotes" class="form-control form-control-sm" placeholder="SCM Entry / PO Line Reference..." />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success fw-bold px-3">
+                        <i class="bi bi-check2-circle me-1"></i> Save Resolution &amp; Mark Resolved
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: Manually Log an Inspection Error / Discrepancy                       -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="createManualErrorModal" tabindex="-1" aria-labelledby="createManualErrorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow border-0">
+            <form method="post" asp-page-handler="CreateManualError">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold" id="createManualErrorModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Log Receiving Inspection Discrepancy
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <!-- JP Key -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">JP Key <span class="text-danger">*</span></label>
+                            <input type="text" name="jpKey" class="form-control form-control-sm font-monospace" placeholder="e.g. 251078C0270" required />
+                        </div>
+
+                        <!-- PO Number -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">PO Number <span class="text-danger">*</span></label>
+                            <input type="text" name="poNumber" class="form-control form-control-sm font-monospace" placeholder="e.g. 0270" required />
+                        </div>
+
+                        <!-- Job Number -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Job Number</label>
+                            <input type="text" name="jobNumber" class="form-control form-control-sm font-monospace" value="251078" />
+                        </div>
+
+                        <!-- Vendor Name -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">Vendor Name <span class="text-danger">*</span></label>
+                            <input type="text" name="vendorName" class="form-control form-control-sm" placeholder="e.g. Team Industrial Services" required />
+                        </div>
+
+                        <!-- Packing Slip # -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">Packing Slip #</label>
+                            <input type="text" name="packingSlipNumber" class="form-control form-control-sm font-monospace" placeholder="e.g. PS-994821" />
+                        </div>
+
+                        <!-- Inspector -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">Inspector / Receiver Name</label>
+                            <input type="text" name="inspectorName" class="form-control form-control-sm" value="Aaron Victoria" />
+                        </div>
+
+                        <!-- Discrepancy Type -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark small mb-1">Error / Discrepancy Type <span class="text-danger">*</span></label>
+                            <select name="errorType" class="form-select form-select-sm" required>
+                                <option value="Quantity Shortage">Quantity Shortage (Short Shipment)</option>
+                                <option value="Quantity Overage">Quantity Overage (Over Shipment)</option>
+                                <option value="Damaged Goods">Damaged Goods (Transit / Unloading Damage)</option>
+                                <option value="Description Mismatch">Description / Spec Mismatch</option>
+                                <option value="Missing MTR / Paperwork">Missing MTR / Mill Test Certificate</option>
+                                <option value="Wrong Item Received">Wrong Item / Incorrect Part Number</option>
+                                <option value="Quality / Spec Defect">Quality / Physical Spec Defect</option>
+                                <option value="Other">Other Discrepancy</option>
+                            </select>
+                        </div>
+
+                        <!-- Severity -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Severity</label>
+                            <select name="severity" class="form-select form-select-sm">
+                                <option value="High">High (Immediate Hold)</option>
+                                <option value="Medium" selected>Medium (Action Required)</option>
+                                <option value="Low">Low (Informational / Variance)</option>
+                            </select>
+                        </div>
+
+                        <!-- Line / BOM -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Affected PO Line #</label>
+                            <input type="text" name="affectedLineNumber" class="form-control form-control-sm font-monospace" placeholder="e.g. 1.00" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">BOM ID</label>
+                            <input type="text" name="bomId" class="form-control form-control-sm font-monospace" placeholder="e.g. 102434" />
+                        </div>
+
+                        <!-- Quantities -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Qty Ordered</label>
+                            <input type="number" step="any" name="quantityOrdered" class="form-control form-control-sm" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Qty Due</label>
+                            <input type="number" step="any" name="quantityDue" class="form-control form-control-sm" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small mb-1">Qty Received</label>
+                            <input type="number" step="any" name="quantityReceived" class="form-control form-control-sm" />
+                        </div>
+
+                        <!-- Error Description -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small mb-1">Discrepancy Details &amp; Inspector Observations <span class="text-danger">*</span></label>
+                            <textarea name="errorDescription" class="form-control form-control-sm" rows="3" placeholder="Describe the discrepancy in detail..." required></textarea>
+                        </div>
+
+                        <!-- Initial QC / SCM check -->
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" name="isQcChecked" id="manualIsQcChecked" value="true" />
+                                <label class="form-check-label text-dark small" for="manualIsQcChecked">
+                                    QC has already verified this shipment
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" name="isSubmittedToScm" id="manualIsSubmittedToScm" value="true" />
+                                <label class="form-check-label text-dark small" for="manualIsSubmittedToScm">
+                                    Already submitted to SCM
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger fw-bold px-3">
+                        <i class="bi bi-plus-circle me-1"></i> Log Discrepancy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <style>
+        .ring-active-card {
+            box-shadow: 0 0 0 2px rgba(45, 62, 80, 0.25), 0 4px 10px rgba(45, 62, 80, 0.08) !important;
+        }
+        .kpi-interactive-card {
+            transition: transform 0.15s ease, box-shadow 0.15s ease, padding 0.15s ease;
+        }
+        .kpi-interactive-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 14px rgba(45, 62, 80, 0.12) !important;
+        }
+        .kpi-interactive-card.is-minimized {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            height: auto !important;
+        }
+        .kpi-interactive-card.is-minimized .kpi-card-details {
+            display: none !important;
+        }
+        .kpi-interactive-card.is-minimized .kpi-min-badge {
+            display: inline-block !important;
+        }
+        .pie-status-row {
+            transition: opacity 0.15s ease, background-color 0.15s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        .pie-status-row.is-disabled {
+            opacity: 0.5;
+        }
+        .pie-status-row.is-disabled .pie-status-label {
+            text-decoration: line-through;
+        }
+    </style>
+    <script>
+        // 1. Minimize / Expand Full KPI Section & Individual KPI Cards
+        function toggleErrorKpiSection(forceMinimized) {
+            var body = document.getElementById('errorKpiSectionBody');
+            var textEl = document.getElementById('toggleKpiSectionText');
+            var iconEl = document.getElementById('toggleKpiSectionIcon');
+            if (!body) return;
+
+            var isCurrentlyHidden = body.style.display === 'none';
+            var nextMinimized = (typeof forceMinimized === 'boolean') ? forceMinimized : !isCurrentlyHidden;
+
+            body.style.display = nextMinimized ? 'none' : 'block';
+            if (textEl) textEl.innerText = nextMinimized ? 'Expand KPIs' : 'Minimize KPIs';
+            if (iconEl) iconEl.className = nextMinimized ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+
+            try {
+                localStorage.setItem('alstar_errorlog_kpi_minimized', nextMinimized ? '1' : '0');
+            } catch (e) { }
+        }
+
+        function toggleSingleKpiCard(evt, cardId, forceMinimized) {
+            if (evt) {
+                evt.preventDefault();
+                evt.stopPropagation();
+            }
+            var card = document.getElementById(cardId);
+            if (!card) return;
+
+            var isMin = (typeof forceMinimized === 'boolean')
+                ? forceMinimized
+                : !card.classList.contains('is-minimized');
+
+            if (isMin) {
+                card.classList.add('is-minimized');
+            } else {
+                card.classList.remove('is-minimized');
+            }
+
+            var btnIcon = card.querySelector('.kpi-card-min-btn i');
+            if (btnIcon) {
+                btnIcon.className = isMin ? 'bi bi-plus-lg' : 'bi bi-dash-lg';
+            }
+
+            try {
+                localStorage.setItem('alstar_errorlog_card_' + cardId, isMin ? '1' : '0');
+            } catch (e) { }
+        }
+
+        (function restoreKpiMinimizeState() {
+            try {
+                if (localStorage.getItem('alstar_errorlog_kpi_minimized') === '1') {
+                    toggleErrorKpiSection(true);
+                }
+                ['kpiCard_total', 'kpiCard_open', 'kpiCard_review', 'kpiCard_qc', 'kpiCard_scm', 'kpiCard_resolved'].forEach(function(id) {
+                    if (localStorage.getItem('alstar_errorlog_card_' + id) === '1') {
+                        toggleSingleKpiCard(null, id, true);
+                    }
+                });
+            } catch (e) { }
+        })();
+
+        // 2. Interactive Status Pie Chart with Toggleable Statuses
+        var pieChartState = null;
+
+        function togglePieStatus(idx) {
+            if (!pieChartState || !pieChartState.slices[idx]) return;
+            pieChartState.slices[idx].enabled = !pieChartState.slices[idx].enabled;
+            pieChartState.saveAndRender();
+        }
+
+        function setAllPieStatuses(enabled) {
+            if (!pieChartState) return;
+            pieChartState.slices.forEach(function(s) { s.enabled = enabled; });
+            pieChartState.saveAndRender();
+        }
+
+        function resetCorePieStatuses() {
+            if (!pieChartState) return;
+            pieChartState.slices.forEach(function(s) { s.enabled = !!s.isCore; });
+            pieChartState.saveAndRender();
+        }
+
+        (function initStatusPieChart() {
+            var canvas = document.getElementById('errorStatusPieChart');
+            if (!canvas || !canvas.getContext) return;
+            var ctx = canvas.getContext('2d');
+            var tooltip = document.getElementById('pieChartTooltip');
+            var toggleListEl = document.getElementById('pieStatusToggleList');
+            var totalBadgeEl = document.getElementById('pieChartActiveTotalBadge');
+
+            var dataSlices = [
+                { key: 'open', label: 'Open', count: @Model.OpenStatusCount, color: '#dc3545', filterUrl: '@Url.Page("/ErrorLog")?StatusFilter=open', enabled: true, isCore: true },
+                { key: 'in_review', label: 'In Review', count: @Model.InReviewCount, color: '#f59e0b', filterUrl: '@Url.Page("/ErrorLog")?StatusFilter=in_review', enabled: true, isCore: true },
+                { key: 'resolved', label: 'Resolved', count: @Model.ResolvedErrorsCount, color: '#198754', filterUrl: '@Url.Page("/ErrorLog")?StatusFilter=resolved', enabled: true, isCore: true },
+                { key: 'pending_qc', label: 'Pending QC', count: @Model.PendingQcCount, color: '#6f42c1', filterUrl: '@Url.Page("/ErrorLog")?QcFilter=pending', enabled: false, isCore: false },
+                { key: 'pending_scm', label: 'Awaiting SCM', count: @Model.AwaitingScmCount, color: '#0dcaf0', filterUrl: '@Url.Page("/ErrorLog")?ScmFilter=pending', enabled: false, isCore: false }
+            ];
+
+            // Restore saved toggle states if available
+            try {
+                var savedToggles = localStorage.getItem('alstar_errorlog_pie_toggles');
+                if (savedToggles) {
+                    var parsed = JSON.parse(savedToggles);
+                    dataSlices.forEach(function(s) {
+                        if (typeof parsed[s.key] === 'boolean') {
+                            s.enabled = parsed[s.key];
+                        }
+                    });
+                }
+            } catch (e) { }
+
+            var cx = canvas.width / 2;
+            var cy = canvas.height / 2;
+            var outerRadius = Math.min(cx, cy) - 8;
+            var hoveredIndex = -1;
+            var sliceAngles = [];
+
+            function getActiveTotal() {
+                return dataSlices.reduce(function(acc, s) {
+                    return acc + (s.enabled ? s.count : 0);
+                }, 0);
+            }
+
+            function renderToggleList() {
+                if (!toggleListEl) return;
+                var activeTotal = getActiveTotal();
+                if (totalBadgeEl) {
+                    totalBadgeEl.innerText = activeTotal + ' Shown';
+                }
+
+                var html = '';
+                dataSlices.forEach(function(s, idx) {
+                    var pct = (s.enabled && activeTotal > 0) ? Math.round((s.count / activeTotal) * 100) : 0;
+                    var rowClass = s.enabled ? 'bg-light border' : 'bg-light border is-disabled';
+                    html +=
+                        '<div class="d-flex align-items-center justify-content-between px-2 py-1 rounded pie-status-row ' + rowClass + '" ' +
+                             'onclick="togglePieStatus(' + idx + ')" title="Click to toggle ' + s.label + ' in pie chart">' +
+                            '<div class="d-flex align-items-center gap-2">' +
+                                '<input class="form-check-input m-0" type="checkbox" ' + (s.enabled ? 'checked' : '') + ' ' +
+                                       'onclick="event.stopPropagation(); togglePieStatus(' + idx + ');" style="cursor: pointer;" />' +
+                                '<span class="rounded-circle d-inline-block" style="width: 10px; height: 10px; background-color: ' + s.color + ';"></span>' +
+                                '<span class="small fw-semibold text-dark pie-status-label" style="font-size: 12px;">' + s.label + '</span>' +
+                            '</div>' +
+                            '<div class="d-flex align-items-center gap-2">' +
+                                '<span class="fw-bold small font-monospace" style="color: ' + s.color + '; font-size: 12px;">' + s.count + '</span>' +
+                                '<span class="text-muted font-monospace" style="font-size: 11px; min-width: 36px; text-align: right;">' + (s.enabled ? '(' + pct + '%)' : '(off)') + '</span>' +
+                                '<a href="' + s.filterUrl + '" onclick="event.stopPropagation();" class="text-muted ms-1" title="Filter table by ' + s.label + '" style="font-size: 11px;">' +
+                                    '<i class="bi bi-funnel"></i>' +
+                                '</a>' +
+                            '</div>' +
+                        '</div>';
+                });
+                toggleListEl.innerHTML = html;
+            }
+
+            function drawChart() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sliceAngles = [];
+                var activeTotal = getActiveTotal();
+                var enabledSlices = dataSlices.filter(function(s) { return s.enabled; });
+
+                if (enabledSlices.length === 0 || activeTotal === 0) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#e9ecef';
+                    ctx.fill();
+                    ctx.fillStyle = '#6c757d';
+                    ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(enabledSlices.length === 0 ? 'All Toggled Off' : '0 in Selection', cx, cy);
+                    return;
+                }
+
+                var startAngle = -Math.PI / 2;
+                var nonZeroSlices = dataSlices.filter(function(s) { return s.enabled && s.count > 0; }).length;
+
+                dataSlices.forEach(function(slice, idx) {
+                    if (!slice.enabled || slice.count <= 0) {
+                        sliceAngles.push(null);
+                        return;
+                    }
+
+                    var sliceAngle = (slice.count / activeTotal) * (Math.PI * 2);
+                    var endAngle = startAngle + sliceAngle;
+                    var midAngle = startAngle + sliceAngle / 2;
+
+                    sliceAngles.push({ start: startAngle, end: endAngle, slice: slice, index: idx });
+
+                    var isHovered = (hoveredIndex === idx);
+                    var offset = (isHovered && nonZeroSlices > 1) ? 4 : 0;
+                    var drawCx = cx + Math.cos(midAngle) * offset;
+                    var drawCy = cy + Math.sin(midAngle) * offset;
+
+                    ctx.beginPath();
+                    if (nonZeroSlices === 1) {
+                        ctx.arc(drawCx, drawCy, outerRadius, 0, Math.PI * 2);
+                    } else {
+                        ctx.moveTo(drawCx, drawCy);
+                        ctx.arc(drawCx, drawCy, outerRadius, startAngle, endAngle);
+                        ctx.closePath();
+                    }
+
+                    ctx.fillStyle = slice.color;
+                    ctx.fill();
+
+                    if (nonZeroSlices > 1) {
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.stroke();
+                    }
+
+                    var pct = Math.round((slice.count / activeTotal) * 100);
+                    if (pct >= 12) {
+                        var labelRadius = nonZeroSlices === 1 ? 0 : outerRadius * 0.62;
+                        var lx = drawCx + Math.cos(midAngle) * labelRadius;
+                        var ly = drawCy + Math.sin(midAngle) * labelRadius;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '700 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(pct + '%', lx, ly);
+                    }
+
+                    startAngle = endAngle;
+                });
+            }
+
+            function getSliceAtPoint(x, y) {
+                var activeTotal = getActiveTotal();
+                var dx = x - cx;
+                var dy = y - cy;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > outerRadius || activeTotal === 0) return -1;
+
+                var angle = Math.atan2(dy, dx);
+                if (angle < -Math.PI / 2) {
+                    angle += Math.PI * 2;
+                }
+
+                for (var i = 0; i < sliceAngles.length; i++) {
+                    var sa = sliceAngles[i];
+                    if (sa && angle >= sa.start && angle <= sa.end) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+
+            canvas.addEventListener('mousemove', function(e) {
+                var rect = canvas.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                var idx = getSliceAtPoint(x, y);
+
+                if (idx !== hoveredIndex) {
+                    hoveredIndex = idx;
+                    drawChart();
+                }
+
+                var activeTotal = getActiveTotal();
+                if (idx >= 0 && tooltip && activeTotal > 0) {
+                    var s = dataSlices[idx];
+                    var pct = Math.round((s.count / activeTotal) * 100);
+                    tooltip.innerText = s.label + ': ' + s.count + ' (' + pct + '%)';
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (e.clientX + 12) + 'px';
+                    tooltip.style.top = (e.clientY - 24) + 'px';
+                } else if (tooltip) {
+                    tooltip.style.display = 'none';
+                }
+            });
+
+            canvas.addEventListener('mouseleave', function() {
+                hoveredIndex = -1;
+                drawChart();
+                if (tooltip) tooltip.style.display = 'none';
+            });
+
+            canvas.addEventListener('click', function(e) {
+                var rect = canvas.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                var idx = getSliceAtPoint(x, y);
+                if (idx >= 0 && dataSlices[idx]) {
+                    window.location.href = dataSlices[idx].filterUrl;
+                }
+            });
+
+            pieChartState = {
+                slices: dataSlices,
+                saveAndRender: function() {
+                    try {
+                        var map = {};
+                        dataSlices.forEach(function(s) { map[s.key] = s.enabled; });
+                        localStorage.setItem('alstar_errorlog_pie_toggles', JSON.stringify(map));
+                    } catch (e) { }
+                    renderToggleList();
+                    drawChart();
+                }
+            };
+
+            pieChartState.saveAndRender();
+        })();
+
+        function clearSearch() {
+            var input = document.getElementById('errorSearchInput');
+            if (input) {
+                input.value = '';
+                document.getElementById('filterForm').submit();
+            }
+        }
+
+        function toggleScmFields(isChecked) {
+            var fields = document.getElementById('scmInputFields');
+            if (fields) {
+                fields.style.display = isChecked ? 'block' : 'none';
+            }
+        }
+
+        function openResolveModal(errorId, jpKey, vendor, po, slip, errType, errDesc, isQcChecked, isScmSubmitted, scmDate, scmNotes) {
+            document.getElementById('resolveErrorId').value = errorId;
+            document.getElementById('resolveModalJpKey').innerText = jpKey;
+            document.getElementById('resolveModalVendor').innerText = vendor;
+            document.getElementById('resolveModalPo').innerText = po;
+            document.getElementById('resolveModalPackingSlip').innerText = slip || '--';
+            document.getElementById('resolveModalErrorType').innerText = errType;
+            document.getElementById('resolveModalErrorDesc').innerText = errDesc;
+
+            var qcCheck = document.getElementById('resolveModalMarkQcChecked');
+            if (qcCheck) qcCheck.checked = isQcChecked;
+
+            var scmCheck = document.getElementById('resolveModalMarkScmSubmitted');
+            if (scmCheck) {
+                scmCheck.checked = isScmSubmitted;
+                toggleScmFields(isScmSubmitted);
+            }
+
+            var scmDateInput = document.getElementById('resolveModalScmSubmittedAt');
+            if (scmDateInput) {
+                if (scmDate) {
+                    scmDateInput.value = scmDate;
+                } else {
+                    var now = new Date();
+                    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                    scmDateInput.value = now.toISOString().slice(0, 16);
+                }
+            }
+
+            var scmNotesInput = document.getElementById('resolveModalScmNotes');
+            if (scmNotesInput) scmNotesInput.value = scmNotes || '';
+
+            var modal = new bootstrap.Modal(document.getElementById('resolveErrorModal'));
+            modal.show();
+        }
+    </script>
+}
+

@@ -28,6 +28,9 @@
                     <a asp-page="/ReceivingLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/ReceivingLog" ? "active" : "")">
                         <i class="bi bi-geo-alt me-1"></i> Receiving Log (Yard)
                     </a>
+                    <a asp-page="/ErrorLog" class="hs-nav-item @(ViewContext.RouteData.Values["page"]?.ToString() == "/ErrorLog" ? "active" : "")">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Error Log
+                    </a>
                 </nav>
             </div>
 

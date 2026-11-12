@@ -1060,6 +1060,7 @@
                                 <th style="width: 150px;">Serial / Tag #</th>
                                 <th style="width: 140px;">Bin Location</th>
                                 <th style="min-width: 130px;">Line Notes</th>
+                                <th style="width: 75px; text-align: center;" title="Flag inspection discrepancy/error for the Error Log">Error</th>
                                 <th style="width: 40px; text-align: center;"></th>
                             </tr>
                         </thead>
@@ -2013,7 +2014,7 @@
                     var localDraftStr = localStorage.getItem(localKey);
                     if (localDraftStr) {
                         var localDraft = JSON.parse(localDraftStr);
-                        if (localDraft && localDraft.lines && localDraft.lines.length === window.currentInspectionLines.length) {
+                        if (localDraft && localDraft.lines && window.currentInspectionLines.length === 0) {
                             window.currentInspectionLines = localDraft.lines;
                             if (localDraft.notes) document.getElementById('inspOverallNotes').value = localDraft.notes;
                             if (localDraft.receiver) document.getElementById('inspReceiverName').value = localDraft.receiver;
@@ -2022,6 +2023,10 @@
                 } catch (e) {
                     console.warn('Draft restoration notice:', e);
                 }
+
+                window.currentInspectionLines.forEach(function(l) {
+                    l.hasError = !!l.hasError;
+                });
 
                 document.getElementById('inspSaveBadge').className = 'badge bg-success-subtle text-success border px-2 py-1 small';
                 document.getElementById('inspSaveBadge').innerHTML = '<i class="bi bi-check-circle me-1"></i> Ready';
@@ -2231,6 +2236,15 @@
                     'placeholder="Line notes..." value="' + escapeHtml(line.notes || '') + '" ' +
                     'oninput="updateLineField(' + idx + ', \'notes\', this.value)" />' +
             '</td>' +
+            // Error Toggle
+            '<td style="text-align: center;">' +
+                '<div class="form-check form-switch d-inline-block m-0" title="Flag as error / discrepancy in Error Log">' +
+                    '<input class="form-check-input" type="checkbox" role="switch" ' +
+                        'id="insp_line_hasError_' + idx + '" ' +
+                        (line.hasError ? 'checked' : '') +
+                        ' onchange="updateLineField(' + idx + ', \'hasError\', this.checked)" />' +
+                '</div>' +
+            '</td>' +
             // Action (Delete if ad-hoc)
             '<td style="text-align: center;">' +
                 (line.isAdHoc
@@ -2317,6 +2331,12 @@
                         ' onchange="updateLineField(' + idx + ', \'isDescriptionMatched\', this.checked)">' +
                     '<label class="form-check-label small fw-bold" for="insp_card_isDescriptionMatched_' + idx + '">Matches Item</label>' +
                 '</div>' +
+                '<div class="form-check form-switch m-0 ms-2" title="Flag as error / discrepancy in Error Log">' +
+                    '<input class="form-check-input" type="checkbox" role="switch" id="insp_card_hasError_' + idx + '" ' +
+                        (line.hasError ? 'checked' : '') +
+                        ' onchange="updateLineField(' + idx + ', \'hasError\', this.checked)">' +
+                    '<label class="form-check-label small fw-bold text-danger" for="insp_card_hasError_' + idx + '"><i class="bi bi-exclamation-triangle-fill me-1"></i>Error</label>' +
+                '</div>' +
             '</div>' +
 
             // Qty Rec'd Stepper
@@ -2391,6 +2411,11 @@
         if (!window.currentInspectionLines || !window.currentInspectionLines[idx]) return;
         window.currentInspectionLines[idx][field] = value;
 
+        if (field === 'hasError') {
+            window.currentInspectionLines[idx].manuallyToggledError = true;
+            saveDraftToServer();
+        }
+
         // Synchronize Table Input (if present)
         var tableEl = document.getElementById('insp_line_' + field + '_' + idx);
         if (tableEl) {
@@ -2421,6 +2446,23 @@
         }
 
         if (field === 'quantityReceivedThisShipment') {
+            var recQty = parseFloat(value) || 0;
+            var dueQty = parseFloat(window.currentInspectionLines[idx].quantityDue) || 0;
+            if (dueQty > 0 && recQty < dueQty) {
+                window.currentInspectionLines[idx].hasError = true;
+                var tableErr = document.getElementById('insp_line_hasError_' + idx);
+                if (tableErr) tableErr.checked = true;
+                var cardErr = document.getElementById('insp_card_hasError_' + idx);
+                if (cardErr) cardErr.checked = true;
+                saveDraftToServer();
+            } else if (dueQty > 0 && recQty >= dueQty && !window.currentInspectionLines[idx].manuallyToggledError) {
+                window.currentInspectionLines[idx].hasError = false;
+                var tableErr = document.getElementById('insp_line_hasError_' + idx);
+                if (tableErr) tableErr.checked = false;
+                var cardErr = document.getElementById('insp_card_hasError_' + idx);
+                if (cardErr) cardErr.checked = false;
+                saveDraftToServer();
+            }
             updateSummaryMetrics();
         }
 
@@ -2484,7 +2526,8 @@
             serialNumber: '',
             storageLocation: staging,
             notes: 'Unlisted on VISTA BOM',
-            isAdHoc: true
+            isAdHoc: true,
+            hasError: false
         };
 
         window.currentInspectionLines.push(newLine);

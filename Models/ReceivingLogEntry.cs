@@ -38,6 +38,11 @@ public class ReceivingLogEntry
     public DateTime? ReceivingCompletedAt { get; set; }
     public string? RecId { get; set; } // e.g. REC-0001
 
+    // SCM Submission Tracking
+    public bool IsSubmittedToScm { get; set; } = false;
+    public DateTime? ScmSubmittedAt { get; set; }
+    public string? ScmNotes { get; set; }
+
     // Inspection Metadata & Progress
     public DateTime? ReceiveStartTime { get; set; } // Set when physical inspection starts
     public DateTime? ReceiveEndTime { get; set; } // Set when inspection is submitted
