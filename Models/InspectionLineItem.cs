@@ -24,5 +24,5 @@ public class InspectionLineItem
     public string SerialNumber { get; set; } = string.Empty;
     public string StorageLocation { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+    public bool HasError { get; set; }
 }
-

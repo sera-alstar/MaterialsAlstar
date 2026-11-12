@@ -102,6 +102,7 @@ public class ReceivingLogModel : PageModel
         public string? StorageLocation { get; set; }
         public string? Notes { get; set; }
         public bool IsAdHoc { get; set; }
+        public bool HasError { get; set; }
     }
 
     public class InspectionDraftRequest
@@ -530,7 +531,8 @@ public class ReceivingLogModel : PageModel
                 SerialNumber = l.SerialNumber,
                 StorageLocation = l.StorageLocation,
                 Notes = l.Notes,
-                IsAdHoc = false
+                IsAdHoc = false,
+                HasError = l.HasError
             }).ToList();
         }
         else if (!string.IsNullOrWhiteSpace(entry.InspectionDraftJson))
@@ -569,7 +571,8 @@ public class ReceivingLogModel : PageModel
                 SerialNumber = l.SerialNumber,
                 StorageLocation = string.IsNullOrWhiteSpace(l.StorageLocation) ? entry.StagingLocation : l.StorageLocation,
                 Notes = l.Notes,
-                IsAdHoc = false
+                IsAdHoc = false,
+                HasError = l.HasError
             }).ToList();
         }
 
@@ -654,6 +657,140 @@ public class ReceivingLogModel : PageModel
         });
     }
 
+    private void SyncInspectionLinesAndErrors(ReceivingLogEntry entry, List<InspectionLineDto> lines, string? receiverName)
+    {
+        entry.InspectionDraftJson = JsonSerializer.Serialize(lines);
+
+        var existingLines = _context.InspectionLines.Where(l => l.ReceivingLogEntryId == entry.Id).ToList();
+        if (existingLines.Count > 0)
+        {
+            _context.InspectionLines.RemoveRange(existingLines);
+        }
+
+        var existingErrors = _context.InspectionErrors.Where(e => e.ReceivingLogEntryId == entry.Id).ToList();
+        var activeErrorLineNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        int lineIdx = 1;
+        foreach (var l in lines)
+        {
+            string lineNum = !string.IsNullOrWhiteSpace(l.PoLineNumber) ? l.PoLineNumber.Trim() : lineIdx.ToString("0.00");
+            lineIdx++;
+
+            _context.InspectionLines.Add(new InspectionLineItem
+            {
+                ReceivingLogEntryId = entry.Id,
+                JpKey = entry.JpKey,
+                PoNumber = entry.PoNumber,
+                PoLineNumber = lineNum,
+                BomId = l.BomId ?? "",
+                ItemDescription = l.ItemDescription ?? "",
+                QuantityOrdered = l.QuantityOrdered,
+                QuantityPreviouslyReceived = l.QuantityPreviouslyReceived,
+                QuantityDue = l.QuantityDue,
+                UnitOfMeasure = string.IsNullOrWhiteSpace(l.UnitOfMeasure) ? "EA" : l.UnitOfMeasure,
+                IsDescriptionMatched = l.IsDescriptionMatched,
+                QuantityReceivedThisShipment = l.QuantityReceivedThisShipment,
+                HeatNumber = l.HeatNumber ?? "",
+                SerialNumber = l.SerialNumber ?? "",
+                StorageLocation = l.StorageLocation ?? "",
+                Notes = l.Notes ?? "",
+                HasError = l.HasError
+            });
+
+            if (l.HasError)
+            {
+                activeErrorLineNumbers.Add(lineNum);
+
+                bool hasQtyShortage = l.QuantityReceivedThisShipment < l.QuantityDue && l.QuantityDue > 0;
+                bool hasQtyOverage = l.QuantityReceivedThisShipment > l.QuantityDue;
+                bool hasDescMismatch = !l.IsDescriptionMatched && l.QuantityReceivedThisShipment > 0;
+                bool hasDamageOrNote = !string.IsNullOrWhiteSpace(l.Notes) &&
+                    (l.Notes.Contains("damage", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("defect", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("reject", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("wrong", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("quarantine", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("scratch", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("broken", StringComparison.OrdinalIgnoreCase) ||
+                     l.Notes.Contains("short", StringComparison.OrdinalIgnoreCase));
+
+                string errType = hasDamageOrNote ? "Damaged Goods" :
+                                 hasDescMismatch ? "Description Mismatch" :
+                                 hasQtyShortage ? "Quantity Shortage" :
+                                 hasQtyOverage ? "Quantity Overage" : "Inspection Error";
+
+                string desc = hasDamageOrNote ? $"Discrepancy on Line {lineNum} ({l.ItemDescription}): {l.Notes}" :
+                              hasDescMismatch ? $"Description mismatch on Line {lineNum} ({l.ItemDescription}): physical material tag does not match PO/BOM specification." :
+                              hasQtyShortage ? $"Quantity shortage on Line {lineNum} ({l.ItemDescription}): expected {l.QuantityDue} {l.UnitOfMeasure}, received {l.QuantityReceivedThisShipment} {l.UnitOfMeasure} ({l.QuantityDue - l.QuantityReceivedThisShipment} short)." :
+                              hasQtyOverage ? $"Quantity overage on Line {lineNum} ({l.ItemDescription}): expected {l.QuantityDue} {l.UnitOfMeasure}, received {l.QuantityReceivedThisShipment} {l.UnitOfMeasure} ({l.QuantityReceivedThisShipment - l.QuantityDue} over)." :
+                              (!string.IsNullOrWhiteSpace(l.Notes) ? $"Error on Line {lineNum} ({l.ItemDescription}): {l.Notes}" : $"Error flagged on Line {lineNum} ({l.ItemDescription}) during receiving inspection.");
+
+                string severity = hasDamageOrNote || hasDescMismatch || hasQtyShortage ? "High" : "Medium";
+
+                var existingErr = existingErrors
+                    .FirstOrDefault(e => string.Equals(e.AffectedLineNumber?.Trim(), lineNum, StringComparison.OrdinalIgnoreCase));
+
+                if (existingErr == null)
+                {
+                    _context.InspectionErrors.Add(new InspectionError
+                    {
+                        ReceivingLogEntryId = entry.Id,
+                        JpKey = entry.JpKey,
+                        JobNumber = entry.JobNumber,
+                        PoNumber = entry.PoNumber,
+                        VendorName = entry.VendorName,
+                        PackingSlipNumber = entry.PackingSlipNumber,
+                        InspectorName = entry.ReceiverName ?? receiverName,
+                        ArrivalDate = entry.ArrivalDateTime,
+                        DateInspected = entry.ReceiveEndTime ?? entry.ReceiveStartTime ?? DateTime.Now,
+                        IsQcChecked = entry.QcMtrCheck == "Complete",
+                        QcNotes = entry.QcMtrComments,
+                        IsSubmittedToScm = entry.IsSubmittedToScm,
+                        ScmSubmittedAt = entry.ScmSubmittedAt,
+                        ErrorType = errType,
+                        ErrorDescription = desc,
+                        Severity = severity,
+                        AffectedLineNumber = lineNum,
+                        BomId = l.BomId,
+                        QuantityOrdered = l.QuantityOrdered,
+                        QuantityDue = l.QuantityDue,
+                        QuantityReceived = l.QuantityReceivedThisShipment,
+                        Status = "Open",
+                        IsResolved = false,
+                        CreatedAt = DateTime.Now
+                    });
+                }
+                else
+                {
+                    existingErr.JpKey = entry.JpKey;
+                    existingErr.JobNumber = entry.JobNumber;
+                    existingErr.PoNumber = entry.PoNumber;
+                    existingErr.VendorName = entry.VendorName;
+                    existingErr.PackingSlipNumber = entry.PackingSlipNumber;
+                    existingErr.InspectorName = entry.ReceiverName ?? receiverName ?? existingErr.InspectorName;
+                    existingErr.ArrivalDate = entry.ArrivalDateTime;
+                    existingErr.DateInspected = entry.ReceiveEndTime ?? entry.ReceiveStartTime ?? existingErr.DateInspected ?? DateTime.Now;
+                    existingErr.IsQcChecked = entry.QcMtrCheck == "Complete" || existingErr.IsQcChecked;
+                    existingErr.ErrorType = errType;
+                    existingErr.ErrorDescription = desc;
+                    existingErr.Severity = severity;
+                    existingErr.BomId = l.BomId;
+                    existingErr.QuantityOrdered = l.QuantityOrdered;
+                    existingErr.QuantityDue = l.QuantityDue;
+                    existingErr.QuantityReceived = l.QuantityReceivedThisShipment;
+                }
+            }
+        }
+
+        foreach (var err in existingErrors)
+        {
+            if (string.IsNullOrWhiteSpace(err.AffectedLineNumber) || !activeErrorLineNumbers.Contains(err.AffectedLineNumber.Trim()))
+            {
+                _context.InspectionErrors.Remove(err);
+            }
+        }
+    }
+
     public async Task<IActionResult> OnPostSaveInspectionDraftAsync([FromBody] InspectionDraftRequest request)
     {
         if (request == null || request.EntryId <= 0) return BadRequest();
@@ -673,7 +810,7 @@ public class ReceivingLogModel : PageModel
         }
 
         entry.InspectionNotes = request.InspectionNotes;
-        entry.InspectionDraftJson = JsonSerializer.Serialize(request.Lines);
+        SyncInspectionLinesAndErrors(entry, request.Lines ?? new List<InspectionLineDto>(), request.ReceiverName);
 
         await _context.SaveChangesAsync();
 
@@ -701,14 +838,14 @@ public class ReceivingLogModel : PageModel
         }
 
         entry.InspectionNotes = request.InspectionNotes;
-        entry.InspectionDraftJson = JsonSerializer.Serialize(request.Lines);
+        SyncInspectionLinesAndErrors(entry, request.Lines ?? new List<InspectionLineDto>(), request.ReceiverName);
 
         // Persist into InspectionLines table
-        var existing = _context.InspectionLines.Where(l => l.ReceivingLogEntryId == entry.Id);
-        _context.InspectionLines.RemoveRange(existing);
+
+
 
         int lineIdx = 1;
-        foreach (var l in request.Lines)
+        if (false) foreach (var l in request.Lines)
         {
             _context.InspectionLines.Add(new InspectionLineItem
             {
@@ -727,7 +864,8 @@ public class ReceivingLogModel : PageModel
                 HeatNumber = l.HeatNumber ?? "",
                 SerialNumber = l.SerialNumber ?? "",
                 StorageLocation = l.StorageLocation ?? "",
-                Notes = l.Notes ?? ""
+                Notes = l.Notes ?? "",
+                HasError = l.HasError
             });
             lineIdx++;
         }
@@ -832,6 +970,29 @@ public class ReceivingLogModel : PageModel
 
         entry.Status = "Inspecting";
         entry.InspectionNotes = $"[Returned by Admin]: {returnReason} | Previous: {entry.InspectionNotes}";
+
+        _context.InspectionErrors.Add(new InspectionError
+        {
+            ReceivingLogEntryId = entry.Id,
+            JpKey = entry.JpKey,
+            JobNumber = entry.JobNumber,
+            PoNumber = entry.PoNumber,
+            VendorName = entry.VendorName,
+            PackingSlipNumber = entry.PackingSlipNumber,
+            InspectorName = entry.ReceiverName,
+            ArrivalDate = entry.ArrivalDateTime,
+            DateInspected = entry.ReceiveEndTime ?? DateTime.Now,
+            IsQcChecked = entry.QcMtrCheck == "Complete",
+            QcNotes = entry.QcMtrComments,
+            IsSubmittedToScm = entry.IsSubmittedToScm,
+            ScmSubmittedAt = entry.ScmSubmittedAt,
+            ErrorType = "Admin Audit Return",
+            ErrorDescription = $"Returned by Materials Admin: {returnReason}",
+            Severity = "Medium",
+            Status = "Open",
+            IsResolved = false,
+            CreatedAt = DateTime.Now
+        });
 
         await _context.SaveChangesAsync();
 
